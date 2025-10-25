@@ -17,19 +17,20 @@ class ProactiveAgent:
     def __init__(
         self,
         personality_update_threshold: int = 20,
-        proactive_trigger_probability: float = 0.3
+        proactive_trigger_interval: int = 10
     ):
         """
         Initialize the Proactive Agent.
         
         Args:
             personality_update_threshold: Number of interactions before updating personality
-            proactive_trigger_probability: Probability of triggering proactive chat
+            proactive_trigger_interval: Number of turns between proactive engagements (e.g., 10)
         """
         self.personality_update_threshold = personality_update_threshold
-        self.proactive_trigger_probability = proactive_trigger_probability
+        self.proactive_trigger_interval = proactive_trigger_interval
         self.interaction_count = 0
         self.last_personality_update = 0
+        self.last_proactive_trigger = 0
     
     def should_update_personality(self) -> bool:
         """
@@ -152,12 +153,13 @@ class ProactiveAgent:
     
     def should_trigger_proactive_chat(self) -> bool:
         """
-        Determine if a proactive chat should be triggered.
+        Determine if a proactive chat should be triggered based on interval.
         
         Returns:
-            True if proactive chat should be triggered
+            True if proactive chat should be triggered (every N turns)
         """
-        return random.random() < self.proactive_trigger_probability
+        turns_since_last = self.interaction_count - self.last_proactive_trigger
+        return turns_since_last >= self.proactive_trigger_interval
     
     def generate_proactive_context(
         self,
@@ -176,6 +178,9 @@ class ProactiveAgent:
         """
         if not self.should_trigger_proactive_chat():
             return None
+        
+        # Mark that we triggered proactive engagement
+        self.last_proactive_trigger = self.interaction_count
         
         # Determine type of proactive interaction needed
         context = self._determine_proactive_type(long_term_memory, personality_profile)

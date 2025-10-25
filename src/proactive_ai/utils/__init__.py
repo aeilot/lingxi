@@ -21,9 +21,9 @@ def load_config() -> dict:
         "embedding_model": os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"),
         "llm_model": os.getenv("LLM_MODEL", "gpt-3.5-turbo"),
         "max_short_term_messages": int(os.getenv("MAX_SHORT_TERM_MESSAGES", "10")),
-        "long_term_memory_threshold": int(os.getenv("LONG_TERM_MEMORY_THRESHOLD", "50")),
+        "summarization_interval": int(os.getenv("SUMMARIZATION_INTERVAL", "5")),
         "personality_update_threshold": int(os.getenv("PERSONALITY_UPDATE_THRESHOLD", "20")),
-        "proactive_trigger_probability": float(os.getenv("PROACTIVE_TRIGGER_PROBABILITY", "0.3"))
+        "proactive_trigger_interval": int(os.getenv("PROACTIVE_TRIGGER_INTERVAL", "10"))
     }
 
 

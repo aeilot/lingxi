@@ -15,19 +15,19 @@ class MemoryAgent:
     def __init__(
         self,
         max_short_term_messages: int = 10,
-        long_term_threshold: int = 50
+        summarization_interval: int = 5
     ):
         """
         Initialize the Memory Agent.
         
         Args:
             max_short_term_messages: Maximum messages in short-term memory
-            long_term_threshold: Number of messages before summarizing to long-term
+            summarization_interval: Number of conversation turns (user+assistant pairs) before summarizing to long-term
         """
         self.short_term_memory = ShortTermMemory(max_size=max_short_term_messages)
         self.long_term_memory = LongTermMemory()
-        self.long_term_threshold = long_term_threshold
-        self.total_messages = 0
+        self.summarization_interval = summarization_interval
+        self.turn_count = 0  # Count of conversation turns (pairs)
     
     def add_message(self, role: str, content: str):
         """
@@ -38,20 +38,23 @@ class MemoryAgent:
             content: Message content
         """
         self.short_term_memory.add_message(role, content)
-        self.total_messages += 1
         
-        # Check if we need to summarize to long-term memory
-        if self.total_messages >= self.long_term_threshold:
-            self._summarize_to_long_term()
+        # Increment turn count after assistant messages (completing a turn)
+        if role == "assistant":
+            self.turn_count += 1
+            
+            # Check if we need to summarize to long-term memory after N turns
+            if self.turn_count % self.summarization_interval == 0:
+                self._summarize_to_long_term()
     
     def _summarize_to_long_term(self):
-        """Summarize short-term memory to long-term memory"""
+        """Summarize short-term memory to long-term memory after every N turns"""
         messages = self.short_term_memory.messages
         
         if not messages:
             return
         
-        # Create a simple summary
+        # Create a summary for this interval
         summary = self._create_summary(messages)
         self.long_term_memory.add_summary(summary)
         
@@ -64,9 +67,6 @@ class MemoryAgent:
         insights = self._extract_user_insights(messages)
         for key, value in insights.items():
             self.long_term_memory.add_user_insight(key, value)
-        
-        # Reset counter
-        self.total_messages = 0
     
     def _create_summary(self, messages: List[Message]) -> str:
         """

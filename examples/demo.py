@@ -24,9 +24,9 @@ def main():
         embedding_model=config["embedding_model"],
         llm_model=config["llm_model"],
         max_short_term_messages=config["max_short_term_messages"],
-        long_term_threshold=config["long_term_memory_threshold"],
+        summarization_interval=config["summarization_interval"],
         personality_update_threshold=config["personality_update_threshold"],
-        proactive_trigger_probability=config["proactive_trigger_probability"]
+        proactive_trigger_interval=config["proactive_trigger_interval"]
     )
     
     # Add some knowledge to the RAG system
@@ -101,10 +101,12 @@ def main():
         # Display response
         print(f"\nAssistant: {result['response']}\n")
         
-        # Show proactive context if available
-        if result['proactive_context'] and result['proactive_context'].suggested_prompt:
-            print(f"[Proactive prompt available: {result['proactive_context'].suggested_prompt}]")
-            print(f"[Reason: {result['proactive_context'].reason}]\n")
+        # Show transparent output format
+        print("="*60)
+        print("TRANSPARENT OUTPUT (Three Agent Parts)")
+        print("="*60)
+        print(result['transparent_output'])
+        print("="*60 + "\n")
 
 
 if __name__ == "__main__":

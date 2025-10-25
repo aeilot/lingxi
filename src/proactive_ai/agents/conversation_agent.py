@@ -98,18 +98,20 @@ Assistant: """
         self,
         query: str,
         history: List[Message],
+        kb_context: str = "",
         max_history: int = 5
-    ) -> str:
+    ) -> Dict[str, str]:
         """
-        Generate a response using the RAG pipeline.
+        Generate a response using the RAG pipeline with transparent parts.
         
         Args:
             query: User query
             history: Conversation history
+            kb_context: Additional knowledge base context
             max_history: Maximum number of history messages to include
             
         Returns:
-            Generated response
+            Dictionary with 'factual', 'personality', and 'full' response parts
         """
         # Get personality context
         personality_context = self.personality_profile.to_prompt()
@@ -118,7 +120,7 @@ Assistant: """
         recent_history = history[-max_history:] if len(history) > max_history else history
         history_dict = [{"role": msg.role, "content": msg.content} for msg in recent_history]
         
-        # Run the pipeline
+        # Run the pipeline to get factual response
         result = self.pipeline.run({
             "retriever": {"query": query},
             "prompt_builder": {
@@ -128,11 +130,20 @@ Assistant: """
             }
         })
         
-        # Extract response
-        response = result["llm"]["replies"][0]
-        return response
+        # Extract full response
+        full_response = result["llm"]["replies"][0]
+        
+        # Get retrieved documents for factual part
+        retrieved_docs = result.get("retriever", {}).get("documents", [])
+        factual_info = "\n".join([doc.content for doc in retrieved_docs[:2]]) if retrieved_docs else "No specific factual information retrieved."
+        
+        return {
+            "factual": factual_info,
+            "personality": personality_context,
+            "full": full_response
+        }
     
-    def chat(self, query: str, history: List[Message]) -> str:
+    def chat(self, query: str, history: List[Message]) -> Dict[str, str]:
         """
         Simplified chat interface.
         
@@ -141,6 +152,6 @@ Assistant: """
             history: Conversation history
             
         Returns:
-            Assistant response
+            Dictionary with response parts
         """
         return self.generate_response(query, history)

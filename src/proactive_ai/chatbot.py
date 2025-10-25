@@ -21,9 +21,9 @@ class ProactiveRAGChatbot:
         embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2",
         llm_model: str = "gpt-3.5-turbo",
         max_short_term_messages: int = 10,
-        long_term_threshold: int = 50,
+        summarization_interval: int = 5,
         personality_update_threshold: int = 20,
-        proactive_trigger_probability: float = 0.3
+        proactive_trigger_interval: int = 10
     ):
         """
         Initialize the Proactive RAG Chatbot.
@@ -33,9 +33,9 @@ class ProactiveRAGChatbot:
             embedding_model: Model for embeddings
             llm_model: LLM model name
             max_short_term_messages: Max messages in short-term memory
-            long_term_threshold: Messages before summarizing to long-term
+            summarization_interval: Number of turns before summarizing to long-term (e.g., 5)
             personality_update_threshold: Interactions before personality update
-            proactive_trigger_probability: Probability of proactive chat
+            proactive_trigger_interval: Turns between proactive engagements (e.g., 10)
         """
         # Initialize the three agents
         self.conversation_agent = ConversationAgent(
@@ -46,12 +46,12 @@ class ProactiveRAGChatbot:
         
         self.memory_agent = MemoryAgent(
             max_short_term_messages=max_short_term_messages,
-            long_term_threshold=long_term_threshold
+            summarization_interval=summarization_interval
         )
         
         self.proactive_agent = ProactiveAgent(
             personality_update_threshold=personality_update_threshold,
-            proactive_trigger_probability=proactive_trigger_probability
+            proactive_trigger_interval=proactive_trigger_interval
         )
         
         self.is_initialized = True
@@ -73,7 +73,7 @@ class ProactiveRAGChatbot:
             user_message: User's message
             
         Returns:
-            Dictionary with response and metadata
+            Dictionary with transparent response parts and metadata
         """
         # Add user message to memory
         self.memory_agent.add_message("user", user_message)
@@ -93,11 +93,11 @@ class ProactiveRAGChatbot:
         # Get conversation history from short-term memory
         history = self.memory_agent.get_short_term_memory().messages
         
-        # Generate response using conversation agent
-        response = self.conversation_agent.chat(user_message, history)
+        # Generate response using conversation agent (returns dict with parts)
+        response_parts = self.conversation_agent.chat(user_message, history)
         
         # Add assistant response to memory
-        self.memory_agent.add_message("assistant", response)
+        self.memory_agent.add_message("assistant", response_parts["full"])
         
         # Increment interaction counter
         self.proactive_agent.increment_interaction()
@@ -108,11 +108,27 @@ class ProactiveRAGChatbot:
             self.conversation_agent.personality_profile
         )
         
+        # Format transparent output: Part 1 (Factual)#Part 2 (Personality)#Part 3 (Proactive)
+        transparent_output = f"[Factual Context]\n{response_parts['factual']}\n\n"
+        transparent_output += f"[Personality Context]\n{response_parts['personality']}\n\n"
+        
+        proactive_part = ""
+        if proactive_context and proactive_context.suggested_prompt:
+            proactive_part = f"[Proactive Engagement]\n{proactive_context.suggested_prompt}"
+        else:
+            proactive_part = "[Proactive Engagement]\nNo proactive engagement at this turn."
+        transparent_output += proactive_part
+        
         return {
-            "response": response,
+            "response": response_parts["full"],
+            "transparent_output": transparent_output,
+            "factual_part": response_parts["factual"],
+            "personality_part": response_parts["personality"],
+            "proactive_part": proactive_part,
             "proactive_context": proactive_context,
             "personality_updated": self.proactive_agent.should_update_personality(),
-            "interaction_count": self.proactive_agent.interaction_count
+            "interaction_count": self.proactive_agent.interaction_count,
+            "turn_count": self.memory_agent.turn_count
         }
     
     def get_proactive_message(self) -> Optional[str]:

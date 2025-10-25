@@ -67,14 +67,14 @@ def test_long_term_memory():
 def test_memory_agent():
     """Test MemoryAgent"""
     print("\nTesting MemoryAgent...")
-    agent = MemoryAgent(max_short_term_messages=5, long_term_threshold=10)
+    agent = MemoryAgent(max_short_term_messages=5, summarization_interval=3)
     
-    # Add some messages
-    for i in range(15):
+    # Add some messages (3 turns should trigger summarization)
+    for i in range(4):
         agent.add_message("user", f"Message {i}")
         agent.add_message("assistant", f"Response {i}")
     
-    # Should have triggered long-term summarization
+    # Should have triggered long-term summarization after 3 turns
     assert len(agent.long_term_memory.summaries) > 0
     print("✓ MemoryAgent works correctly")
 
@@ -84,7 +84,7 @@ def test_proactive_agent():
     print("\nTesting ProactiveAgent...")
     agent = ProactiveAgent(
         personality_update_threshold=5,
-        proactive_trigger_probability=1.0  # Always trigger for testing
+        proactive_trigger_interval=10  # Deterministic trigger every 10 turns
     )
     
     # Test interaction counting
@@ -102,7 +102,7 @@ def test_proactive_agent():
     updated_profile = agent.update_personality_profile(profile, memory)
     assert updated_profile is not None
     
-    # Test proactive context generation
+    # Test proactive context generation - should trigger at turn 10
     context = agent.generate_proactive_context(memory, profile)
     assert context is not None
     assert context.suggested_prompt is not None
