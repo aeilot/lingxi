@@ -1,4 +1,4 @@
-from app.agent.models import AgentConfiguration, ChatSession, ChatInformation
+from agent.models import AgentConfiguration, ChatSession, ChatInformation
 from django.utils import timezone
 from django.db import models
 import openai
