@@ -10,8 +10,8 @@
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/aeilot/proactive-ai.git
-   cd proactive-ai
+   git clone https://github.com/aeilot/lingxi.git
+   cd lingxi
    ```
 
 2. Set up a virtual environment:
