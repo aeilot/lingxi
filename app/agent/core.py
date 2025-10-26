@@ -1,13 +1,53 @@
-from app.agent.models import AgentConfiguration, ChatSession, ChatInformation
+from agent.models import AgentConfiguration, ChatSession, ChatInformation
 from django.utils import timezone
 from django.db import models
 import openai
 
-def generate_response(user_message, agent_config, session):
-    """Simulate generating a response from the AI model based on user message and agent configuration."""
-    # For demonstration purposes, we'll just echo the user message with a prefix.
-    simulated_response = f"Simulated response to: {user_message}" 
-    return simulated_response
+def generate_response(user_message, agent_config, session, api_key=None, base_url=None):
+    """Generate a response from the OpenAI API based on user message and agent configuration."""
+    # If no API key is provided, fall back to simulated response
+    if not api_key:
+        return f"Simulated response to: {user_message}"
+    
+    try:
+        # Configure OpenAI client
+        client_kwargs = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        
+        client = openai.OpenAI(**client_kwargs)
+        
+        # Get recent chat history from session (limit to last 20 messages for performance)
+        messages = []
+        chat_history = session.chat_infos.order_by('-chat_date')[:20]
+        # Reverse to get chronological order
+        for chat in reversed(chat_history):
+            role = "user" if chat.is_user else "assistant"
+            messages.append({"role": role, "content": chat.message})
+        
+        # Add current user message
+        messages.append({"role": "user", "content": user_message})
+        
+        # Get model from agent configuration or use default
+        model = agent_config.parameters.get("model", "gpt-3.5-turbo")
+        
+        # Call OpenAI API
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages
+        )
+        
+        return response.choices[0].message.content
+    
+    except openai.AuthenticationError:
+        return "Error calling OpenAI API: Invalid API key. Please check your settings."
+    except openai.APIConnectionError:
+        return "Error calling OpenAI API: Connection error. Please check your network or base URL."
+    except openai.RateLimitError:
+        return "Error calling OpenAI API: Rate limit exceeded. Please try again later."
+    except Exception as e:
+        # Return generic error message without exposing internal details
+        return "Error calling OpenAI API: An unexpected error occurred. Please check your settings."
 
 def create_summary(session):
     """Generate a summary of the chat session."""

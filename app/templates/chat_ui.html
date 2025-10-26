@@ -24,7 +24,10 @@
         <div class="chat-container">
             <div class="chat-header">
                 <span id="session-title">AI Chat Assistant</span>
-                <button id="delete-session-btn" class="delete-btn" title="Delete Current Session">🗑️</button>
+                <div class="header-buttons">
+                    <button id="settings-btn" class="header-btn" title="Settings">⚙️</button>
+                    <button id="delete-session-btn" class="delete-btn" title="Delete Current Session">🗑️</button>
+                </div>
             </div>
             <div class="chat-messages" id="chat-messages">
                 <!-- Messages will be appended here -->
@@ -32,6 +35,34 @@
             <div class="chat-input">
                 <input type="text" id="message-input" placeholder="Type your message here..." />
                 <button id="send-button">Send</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>OpenAI Settings</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="api-key-input">API Key:</label>
+                    <input type="password" id="api-key-input" placeholder="Enter your OpenAI API key" />
+                </div>
+                <div class="form-group">
+                    <label for="base-url-input">Base URL (optional):</label>
+                    <input type="text" id="base-url-input" placeholder="https://api.openai.com/v1" />
+                </div>
+                <div class="form-group">
+                    <label for="model-input">Model (optional):</label>
+                    <input type="text" id="model-input" placeholder="gpt-3.5-turbo" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="save-settings-btn" class="btn-primary">Save Settings</button>
+                <button id="clear-settings-btn" class="btn-secondary">Clear Settings</button>
             </div>
         </div>
     </div>

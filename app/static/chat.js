@@ -20,6 +20,19 @@ function getCookie(name) {
     return cookieValue;
 }
 
+/**
+ * Set a cookie
+ * @param {string} name - The name of the cookie
+ * @param {string} value - The value to store
+ * @param {number} days - Number of days until expiry (default 365)
+ */
+function setCookie(name, value, days = 365) {
+    const d = new Date();
+    d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+    const expires = "expires=" + d.toUTCString();
+    document.cookie = name + "=" + encodeURIComponent(value) + ";" + expires + ";path=/";
+}
+
 let currentSessionId = null;
 const csrftoken = getCookie('csrftoken');
 
@@ -31,9 +44,22 @@ document.addEventListener("DOMContentLoaded", () => {
     const deleteSessionBtn = document.getElementById("delete-session-btn");
     const sessionList = document.getElementById("session-list");
     const sessionTitle = document.getElementById("session-title");
+    
+    // Settings modal elements
+    const settingsBtn = document.getElementById("settings-btn");
+    const settingsModal = document.getElementById("settings-modal");
+    const closeModal = document.querySelector(".close");
+    const saveSettingsBtn = document.getElementById("save-settings-btn");
+    const clearSettingsBtn = document.getElementById("clear-settings-btn");
+    const apiKeyInput = document.getElementById("api-key-input");
+    const baseUrlInput = document.getElementById("base-url-input");
+    const modelInput = document.getElementById("model-input");
 
     // Load sessions on page load
     loadSessions();
+    
+    // Load settings on page load
+    loadSettings();
 
     // Handle send button click
     chatButton.addEventListener("click", sendMessage);
@@ -50,6 +76,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Handle delete session button
     deleteSessionBtn.addEventListener("click", deleteCurrentSession);
+    
+    // Handle settings button
+    settingsBtn.addEventListener("click", () => {
+        settingsModal.style.display = "block";
+    });
+    
+    // Handle close modal
+    closeModal.addEventListener("click", () => {
+        settingsModal.style.display = "none";
+    });
+    
+    // Close modal when clicking outside
+    window.addEventListener("click", (event) => {
+        if (event.target === settingsModal) {
+            settingsModal.style.display = "none";
+        }
+    });
+    
+    // Handle save settings
+    saveSettingsBtn.addEventListener("click", saveSettings);
+    
+    // Handle clear settings
+    clearSettingsBtn.addEventListener("click", clearSettings);
 
     function sendMessage() {
         const userMessage = chatInput.value.trim();
@@ -218,5 +267,58 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             sessionTitle.textContent = "AI Chat Assistant";
         }
+    }
+    
+    function loadSettings() {
+        const apiKey = getCookie("openai_api_key");
+        const baseUrl = getCookie("openai_base_url");
+        const model = getCookie("openai_model");
+        
+        if (apiKey) {
+            apiKeyInput.value = apiKey;
+        }
+        if (baseUrl) {
+            baseUrlInput.value = baseUrl;
+        }
+        if (model) {
+            modelInput.value = model;
+        }
+    }
+    
+    function saveSettings() {
+        const apiKey = apiKeyInput.value.trim();
+        const baseUrl = baseUrlInput.value.trim();
+        const model = modelInput.value.trim();
+        
+        if (apiKey) {
+            setCookie("openai_api_key", apiKey);
+        }
+        if (baseUrl) {
+            setCookie("openai_base_url", baseUrl);
+        }
+        if (model) {
+            setCookie("openai_model", model);
+        }
+        
+        settingsModal.style.display = "none";
+        alert("Settings saved successfully!");
+    }
+    
+    function clearSettings() {
+        if (!confirm("Are you sure you want to clear all settings?")) {
+            return;
+        }
+        
+        // Clear cookies by setting them with past expiry date
+        document.cookie = "openai_api_key=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        document.cookie = "openai_base_url=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        document.cookie = "openai_model=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        
+        // Clear input fields
+        apiKeyInput.value = "";
+        baseUrlInput.value = "";
+        modelInput.value = "";
+        
+        alert("Settings cleared successfully!");
     }
 });

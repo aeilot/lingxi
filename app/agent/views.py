@@ -29,11 +29,21 @@ def handle_user_input(request):
         user_message = request.POST.get("message", "")
         session_id = request.POST.get("session_id", None)
         
+        # Get API settings from cookies
+        api_key = request.COOKIES.get("openai_api_key", None)
+        base_url = request.COOKIES.get("openai_base_url", None)
+        model = request.COOKIES.get("openai_model", "gpt-3.5-turbo")
+        
         # Get or create agent configuration
         agent_config, _ = AgentConfiguration.objects.get_or_create(
             name="default",
-            defaults={"parameters": {"model": "simulated"}}
+            defaults={"parameters": {"model": model}}
         )
+        
+        # Update model if it's different
+        if agent_config.parameters.get("model") != model:
+            agent_config.parameters["model"] = model
+            agent_config.save()
         
         # Get or create chat session
         if session_id:
@@ -52,8 +62,8 @@ def handle_user_input(request):
         )
         session.chat_infos.add(user_chat)
         
-        # Simulate a response from the model
-        model_response = generate_response(user_message, agent_config, session)
+        # Generate response using OpenAI API or simulated response
+        model_response = generate_response(user_message, agent_config, session, api_key=api_key, base_url=base_url)
         
         # Save AI response
         ai_chat = ChatInformation.objects.create(
