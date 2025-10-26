@@ -4,13 +4,16 @@ from django.db import models
 class ChatInformation(models.Model):
     chat_date = models.DateTimeField(auto_now_add=True, verbose_name="Chat Date", help_text="The date and time when the chat was created.")
     message = models.TextField(verbose_name="Message", help_text="The message sent.")
+    is_agent_growth = models.BooleanField(default=False, verbose_name="Is Agent Growth", help_text="Indicates if the message was sent by the agent growth system.")
     is_user = models.BooleanField(default=True, verbose_name="Is User", help_text="Indicates if the message was sent by the user.")
+    is_agent = models.BooleanField(default=False, verbose_name="Is Agent", help_text="Indicates if the message was sent by the agent.")
     metadata = models.JSONField(blank=True, null=True, verbose_name="Metadata", help_text="Additional metadata related to the chat.")
     critical = models.BooleanField(default=False, verbose_name="Critical", help_text="Indicates if the chat is marked as critical.")
     critical_type = models.CharField(max_length=100, blank=True, null=True, verbose_name="Critical Type", help_text="The type, if applicable.")
 
 class ChatSummary(models.Model):
-    summary_date = models.DateTimeField(auto_now_add=True, verbose_name="Summary Date", help_text="The date and time when the summary was created.")
+    summary_start_time = models.DateTimeField(verbose_name="Summary Start Time", help_text="The start time of the summarized chat.")
+    summary_end_time = models.DateTimeField(verbose_name="Summary End Time", help_text="The end time of the summarized chat.")
     summary_text = models.TextField(verbose_name="Summary Text", help_text="The summarized text of the chat.")
     related_chats = models.ManyToManyField(
         ChatInformation,
@@ -26,8 +29,7 @@ class AgentConfiguration(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created At", help_text="The date and time when the configuration was created.")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Updated At", help_text="The date and time when the configuration was last updated.")
     timings = models.JSONField(blank=True, null=True, verbose_name="Timings", help_text="Timing information related to the agent's operations.")
-
-
+    
 # ChatSession
 
 class ChatSession(models.Model):
