@@ -22,4 +22,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', views.chat_ui, name='chat_ui'),
     path('handle_user_input', views.handle_user_input, name='handle_user_input'),
+    path('api/sessions/create', views.create_session, name='create_session'),
+    path('api/sessions/list', views.list_sessions, name='list_sessions'),
+    path('api/sessions/<int:session_id>/history', views.get_session_history, name='get_session_history'),
+    path('api/sessions/<int:session_id>/delete', views.delete_session, name='delete_session'),
 ]

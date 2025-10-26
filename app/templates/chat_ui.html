@@ -1,1 +1,40 @@
-Created a basic HTML template for the chat UI with a chat window and input form.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat - Proactive AI</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'styles.css' %}">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Session Sidebar -->
+        <div class="session-sidebar">
+            <div class="sidebar-header">
+                <h3>Chat Sessions</h3>
+                <button id="new-session-btn" title="New Chat Session">+</button>
+            </div>
+            <div id="session-list" class="session-list">
+                <!-- Sessions will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Chat Container -->
+        <div class="chat-container">
+            <div class="chat-header">
+                <span id="session-title">AI Chat Assistant</span>
+                <button id="delete-session-btn" class="delete-btn" title="Delete Current Session">🗑️</button>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <!-- Messages will be appended here -->
+            </div>
+            <div class="chat-input">
+                <input type="text" id="message-input" placeholder="Type your message here..." />
+                <button id="send-button">Send</button>
+            </div>
+        </div>
+    </div>
+    <script src="{% static 'chat.js' %}"></script>
+</body>
+</html>
