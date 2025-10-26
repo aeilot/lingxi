@@ -1,6 +1,10 @@
 // JavaScript for handling chat interactions
 
-// Function to get CSRF token from cookies
+/**
+ * Get CSRF token from cookies
+ * @param {string} name - The name of the cookie to retrieve
+ * @returns {string|null} The cookie value or null if not found
+ */
 function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
