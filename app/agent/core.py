@@ -17,10 +17,11 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
         
         client = openai.OpenAI(**client_kwargs)
         
-        # Get chat history from session
+        # Get recent chat history from session (limit to last 20 messages for performance)
         messages = []
-        chat_history = session.chat_infos.order_by('chat_date')
-        for chat in chat_history:
+        chat_history = session.chat_infos.order_by('-chat_date')[:20]
+        # Reverse to get chronological order
+        for chat in reversed(chat_history):
             role = "user" if chat.is_user else "assistant"
             messages.append({"role": role, "content": chat.message})
         

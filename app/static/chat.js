@@ -310,9 +310,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         
         // Clear cookies by setting them with past expiry date
-        setCookie("openai_api_key", "", -1);
-        setCookie("openai_base_url", "", -1);
-        setCookie("openai_model", "", -1);
+        document.cookie = "openai_api_key=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        document.cookie = "openai_base_url=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        document.cookie = "openai_model=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         
         // Clear input fields
         apiKeyInput.value = "";
