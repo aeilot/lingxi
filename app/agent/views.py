@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from .models import ChatSession, ChatInformation, AgentConfiguration
 from django.utils import timezone
+from .core import generate_response
 
 # Create your views here.
 
@@ -52,7 +53,7 @@ def handle_user_input(request):
         session.chat_infos.add(user_chat)
         
         # Simulate a response from the model
-        model_response = f"You said: {user_message}. This is a simulated response."
+        model_response = generate_response(user_message, agent_config, session)
         
         # Save AI response
         ai_chat = ChatInformation.objects.create(
