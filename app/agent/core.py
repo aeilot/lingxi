@@ -39,9 +39,15 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
         
         return response.choices[0].message.content
     
+    except openai.AuthenticationError:
+        return "Error calling OpenAI API: Invalid API key. Please check your settings."
+    except openai.APIConnectionError:
+        return "Error calling OpenAI API: Connection error. Please check your network or base URL."
+    except openai.RateLimitError:
+        return "Error calling OpenAI API: Rate limit exceeded. Please try again later."
     except Exception as e:
-        # Return error message if OpenAI API call fails
-        return f"Error calling OpenAI API: {str(e)}"
+        # Return generic error message without exposing internal details
+        return "Error calling OpenAI API: An unexpected error occurred. Please check your settings."
 
 def create_summary(session):
     """Generate a summary of the chat session."""
