@@ -43,26 +43,18 @@
     <div id="settings-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>OpenAI Settings</h2>
+                <h2>Agent Personality</h2>
                 <span class="close">&times;</span>
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label for="api-key-input">API Key:</label>
-                    <input type="password" id="api-key-input" placeholder="Enter your OpenAI API key" />
-                </div>
-                <div class="form-group">
-                    <label for="base-url-input">Base URL (optional):</label>
-                    <input type="text" id="base-url-input" placeholder="https://api.openai.com/v1" />
-                </div>
-                <div class="form-group">
-                    <label for="model-input">Model (optional):</label>
-                    <input type="text" id="model-input" placeholder="gpt-3.5-turbo" />
+                    <label for="personality-prompt-input">Personality Prompt:</label>
+                    <textarea id="personality-prompt-input" rows="6" placeholder="Enter a personality prompt to customize how the AI responds (e.g., 'You are a helpful and friendly assistant who explains things clearly.')"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button id="save-settings-btn" class="btn-primary">Save Settings</button>
-                <button id="clear-settings-btn" class="btn-secondary">Clear Settings</button>
+                <button id="save-settings-btn" class="btn-primary">Save Personality</button>
+                <button id="clear-settings-btn" class="btn-secondary">Clear Personality</button>
             </div>
         </div>
     </div>
