@@ -24,8 +24,8 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
         # Add system message with personality prompt if configured
         personality_prompt = agent_config.parameters.get("personality_prompt", "")
         if personality_prompt:
-            messages.append({"role": "system", "content": personality_prompt})
-        
+            messages.append({"role": "system", "content": personality_prompt + "\n Reply with the specified personality in mind. Reply with HTML. Reply in the sender's language."})
+
         chat_history = session.chat_infos.order_by('-chat_date')[:20]
         # Reverse to get chronological order
         for chat in reversed(chat_history):
@@ -44,11 +44,13 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
             messages=messages
         )
         text = response.choices[0].message.content
-        md = (
-            MarkdownIt('commonmark', {'breaks':True,'html':True})
-            .enable('table')
-        )
-        return md.render(text)
+        # md = (
+            # MarkdownIt('commonmark', {'breaks':True,'html':False})
+            # .enable('table')
+        # )
+        # return md.render(text)
+        # print(text)
+        return text
     
     except openai.AuthenticationError:
         return "Error calling OpenAI API: Invalid API key. Please check your settings."
