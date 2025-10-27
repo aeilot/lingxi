@@ -7,6 +7,7 @@ from urllib.parse import unquote
 from .core import generate_response
 from django.conf import settings
 
+
 # Create your views here.
 
 @ensure_csrf_cookie

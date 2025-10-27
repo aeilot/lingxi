@@ -2,6 +2,7 @@ from agent.models import AgentConfiguration, ChatSession, ChatInformation
 from django.utils import timezone
 from django.db import models
 import openai
+from markdown_it import MarkdownIt
 
 def generate_response(user_message, agent_config, session, api_key=None, base_url=None):
     """Generate a response from the OpenAI API based on user message and agent configuration."""
@@ -42,8 +43,12 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
             model=model,
             messages=messages
         )
-        
-        return response.choices[0].message.content
+        text = response.choices[0].message.content
+        md = (
+            MarkdownIt('commonmark', {'breaks':True,'html':True})
+            .enable('table')
+        )
+        return md.render(text)
     
     except openai.AuthenticationError:
         return "Error calling OpenAI API: Invalid API key. Please check your settings."
