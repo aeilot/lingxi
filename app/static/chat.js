@@ -157,8 +157,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function removeLoadingIndicator(loadingElement) {
-        if (loadingElement && loadingElement.parentNode) {
-            loadingElement.parentNode.removeChild(loadingElement);
+        if (loadingElement) {
+            loadingElement.remove();
         }
     }
 
