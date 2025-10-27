@@ -20,19 +20,6 @@ function getCookie(name) {
     return cookieValue;
 }
 
-/**
- * Set a cookie
- * @param {string} name - The name of the cookie
- * @param {string} value - The value to store
- * @param {number} days - Number of days until expiry (default 365)
- */
-function setCookie(name, value, days = 365) {
-    const d = new Date();
-    d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
-    const expires = "expires=" + d.toUTCString();
-    document.cookie = name + "=" + encodeURIComponent(value) + ";" + expires + ";path=/";
-}
-
 let currentSessionId = null;
 const csrftoken = getCookie('csrftoken');
 
@@ -51,15 +38,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const closeModal = document.querySelector(".close");
     const saveSettingsBtn = document.getElementById("save-settings-btn");
     const clearSettingsBtn = document.getElementById("clear-settings-btn");
-    const apiKeyInput = document.getElementById("api-key-input");
-    const baseUrlInput = document.getElementById("base-url-input");
-    const modelInput = document.getElementById("model-input");
+    const personalityPromptInput = document.getElementById("personality-prompt-input");
 
     // Load sessions on page load
     loadSessions();
     
-    // Load settings on page load
-    loadSettings();
+    // Load personality prompt on page load
+    loadPersonalityPrompt();
 
     // Handle send button click
     chatButton.addEventListener("click", sendMessage);
@@ -95,10 +80,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     
     // Handle save settings
-    saveSettingsBtn.addEventListener("click", saveSettings);
+    saveSettingsBtn.addEventListener("click", savePersonalityPrompt);
     
     // Handle clear settings
-    clearSettingsBtn.addEventListener("click", clearSettings);
+    clearSettingsBtn.addEventListener("click", clearPersonalityPrompt);
 
     function sendMessage() {
         const userMessage = chatInput.value.trim();
@@ -269,56 +254,74 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
     
-    function loadSettings() {
-        const apiKey = getCookie("openai_api_key");
-        const baseUrl = getCookie("openai_base_url");
-        const model = getCookie("openai_model");
-        
-        if (apiKey) {
-            apiKeyInput.value = apiKey;
-        }
-        if (baseUrl) {
-            baseUrlInput.value = baseUrl;
-        }
-        if (model) {
-            modelInput.value = model;
-        }
+    function loadPersonalityPrompt() {
+        fetch("/api/personality/get")
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.personality_prompt) {
+                    personalityPromptInput.value = data.personality_prompt;
+                }
+            })
+            .catch((error) => {
+                console.error("Error loading personality prompt:", error);
+            });
     }
     
-    function saveSettings() {
-        const apiKey = apiKeyInput.value.trim();
-        const baseUrl = baseUrlInput.value.trim();
-        const model = modelInput.value.trim();
+    function savePersonalityPrompt() {
+        const personalityPrompt = personalityPromptInput.value.trim();
         
-        if (apiKey) {
-            setCookie("openai_api_key", apiKey);
-        }
-        if (baseUrl) {
-            setCookie("openai_base_url", baseUrl);
-        }
-        if (model) {
-            setCookie("openai_model", model);
-        }
-        
-        settingsModal.style.display = "none";
-        alert("Settings saved successfully!");
+        fetch("/api/personality/update", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-CSRFToken": csrftoken,
+            },
+            body: new URLSearchParams({ 
+                personality_prompt: personalityPrompt
+            }),
+        })
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.success) {
+                    settingsModal.style.display = "none";
+                    alert("Personality prompt saved successfully!");
+                } else {
+                    alert("Failed to save personality prompt.");
+                }
+            })
+            .catch((error) => {
+                console.error("Error saving personality prompt:", error);
+                alert("An error occurred while saving.");
+            });
     }
     
-    function clearSettings() {
-        if (!confirm("Are you sure you want to clear all settings?")) {
+    function clearPersonalityPrompt() {
+        if (!confirm("Are you sure you want to clear the personality prompt?")) {
             return;
         }
         
-        // Clear cookies by setting them with past expiry date
-        document.cookie = "openai_api_key=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-        document.cookie = "openai_base_url=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-        document.cookie = "openai_model=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-        
-        // Clear input fields
-        apiKeyInput.value = "";
-        baseUrlInput.value = "";
-        modelInput.value = "";
-        
-        alert("Settings cleared successfully!");
+        fetch("/api/personality/update", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-CSRFToken": csrftoken,
+            },
+            body: new URLSearchParams({ 
+                personality_prompt: ""
+            }),
+        })
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.success) {
+                    personalityPromptInput.value = "";
+                    alert("Personality prompt cleared successfully!");
+                } else {
+                    alert("Failed to clear personality prompt.");
+                }
+            })
+            .catch((error) => {
+                console.error("Error clearing personality prompt:", error);
+                alert("An error occurred while clearing.");
+            });
     }
 });

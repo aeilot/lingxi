@@ -5,6 +5,7 @@ from .models import ChatSession, ChatInformation, AgentConfiguration
 from django.utils import timezone
 from urllib.parse import unquote
 from .core import generate_response
+from django.conf import settings
 
 # Create your views here.
 
@@ -30,22 +31,15 @@ def handle_user_input(request):
         user_message = unquote(request.POST.get("message", ""))
         session_id = unquote(request.POST.get("session_id", None))
 
-        # Get API settings from cookies
-        api_key = unquote(request.COOKIES.get("openai_api_key", None))
-        base_url = unquote(request.COOKIES.get("openai_base_url", None))
-        model = unquote(request.COOKIES.get("openai_model", "gpt-3.5-turbo"))
-
-        # Debug Print Everything
-        # print("User Message:", user_message)
-        # print("Session ID:", session_id)
-        # print("API Key:", api_key)
-        # print("Base URL:", base_url)
-        # print("Model:", model)
+        # Get API settings from Django settings (loaded from .env)
+        api_key = settings.OPENAI_API_KEY
+        base_url = settings.OPENAI_BASE_URL
+        model = settings.OPENAI_MODEL
 
         # Get or create agent configuration
         agent_config, _ = AgentConfiguration.objects.get_or_create(
             name="default",
-            defaults={"parameters": {"model": model}}
+            defaults={"parameters": {"model": model, "personality_prompt": ""}}
         )
         
         # Update model if it's different
@@ -92,9 +86,10 @@ def handle_user_input(request):
 def create_session(request):
     """Create a new chat session"""
     if request.method == "POST":
+        model = settings.OPENAI_MODEL
         agent_config, _ = AgentConfiguration.objects.get_or_create(
             name="default",
-            defaults={"parameters": {"model": "simulated"}}
+            defaults={"parameters": {"model": model, "personality_prompt": ""}}
         )
         session = ChatSession.objects.create(agent_configuration=agent_config)
         return JsonResponse({
@@ -156,3 +151,38 @@ def delete_session(request, session_id):
         except ChatSession.DoesNotExist:
             return JsonResponse({"error": "Session not found."}, status=404)
     return JsonResponse({"error": "Invalid request method."}, status=400)
+
+def update_personality_prompt(request):
+    """Update the personality prompt for the default agent configuration"""
+    if request.method == "POST":
+        personality_prompt = request.POST.get("personality_prompt", "").strip()
+        
+        model = settings.OPENAI_MODEL
+        agent_config, _ = AgentConfiguration.objects.get_or_create(
+            name="default",
+            defaults={"parameters": {"model": model, "personality_prompt": ""}}
+        )
+        
+        # Update the personality prompt
+        agent_config.parameters["personality_prompt"] = personality_prompt
+        agent_config.save()
+        
+        return JsonResponse({
+            "success": True,
+            "personality_prompt": personality_prompt
+        })
+    return JsonResponse({"error": "Invalid request method."}, status=400)
+
+def get_personality_prompt(request):
+    """Get the current personality prompt"""
+    model = settings.OPENAI_MODEL
+    agent_config, _ = AgentConfiguration.objects.get_or_create(
+        name="default",
+        defaults={"parameters": {"model": model, "personality_prompt": ""}}
+    )
+    
+    personality_prompt = agent_config.parameters.get("personality_prompt", "")
+    return JsonResponse({
+        "personality_prompt": personality_prompt
+    })
+

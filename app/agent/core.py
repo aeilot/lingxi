@@ -19,6 +19,12 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
         
         # Get recent chat history from session (limit to last 20 messages for performance)
         messages = []
+        
+        # Add system message with personality prompt if configured
+        personality_prompt = agent_config.parameters.get("personality_prompt", "")
+        if personality_prompt:
+            messages.append({"role": "system", "content": personality_prompt})
+        
         chat_history = session.chat_infos.order_by('-chat_date')[:20]
         # Reverse to get chronological order
         for chat in reversed(chat_history):

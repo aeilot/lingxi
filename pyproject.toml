@@ -2,6 +2,7 @@
 dependencies = [
   "django>=5.2.7",
   "openai>=2.6.1",
+  "python-dotenv>=1.0.0",
 ]
 description = "Add your description here"
 name = "lingxi"
