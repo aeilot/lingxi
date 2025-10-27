@@ -188,7 +188,6 @@ body {
 .user-message {
     background: #007aff;
     color: white;
-    border: none;
     margin-left: auto;
     border-radius: 18px 18px 4px 18px;
 }
@@ -200,7 +199,6 @@ body {
 .ai-message {
     background: #ffffff;
     color: #1d1d1f;
-    border: none;
     margin-right: auto;
     border-radius: 18px 18px 18px 4px;
     border: 1px solid #e5e5e7;
