@@ -1,7 +1,7 @@
 # Proactive AI
 
 ## Prerequisites
-- Python 3.12 or higher
+- Python 3.12 or higher (Python 3.13+ recommended)
 - pip (Python package manager)
 - Virtual environment (recommended)
 - UV installed for project management
@@ -28,7 +28,7 @@
 
 4. Configure environment variables:
    ```bash
-   # Copy the example environment file
+   # Copy the example environment file to the app directory
    cp .env.example app/.env
    
    # Edit app/.env and add your OpenAI API key
@@ -45,6 +45,7 @@
 
 6. Run the development server:
    ```bash
+   # From the app directory
    uv run manage.py runserver
    ```
 
