@@ -91,6 +91,9 @@ document.addEventListener("DOMContentLoaded", () => {
             appendMessage("You", userMessage, "user-message");
             chatInput.value = "";
 
+            // Show loading indicator
+            const loadingMessage = showLoadingIndicator();
+
             // Send user message to the server
             fetch("/handle_user_input", {
                 method: "POST",
@@ -105,6 +108,9 @@ document.addEventListener("DOMContentLoaded", () => {
             })
                 .then((response) => response.json())
                 .then((data) => {
+                    // Remove loading indicator
+                    removeLoadingIndicator(loadingMessage);
+                    
                     if (data.response) {
                         appendMessage("AI", data.response, "ai-message");
                         // Update current session ID if it was created
@@ -118,6 +124,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                 })
                 .catch(() => {
+                    // Remove loading indicator
+                    removeLoadingIndicator(loadingMessage);
                     appendMessage("Error", "An error occurred while communicating with the server.", "error-message");
                 });
         }
@@ -129,6 +137,29 @@ document.addEventListener("DOMContentLoaded", () => {
         messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
         chatMessages.appendChild(messageElement);
         chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function showLoadingIndicator() {
+        const loadingElement = document.createElement("div");
+        loadingElement.classList.add("message", "loading-message");
+        loadingElement.innerHTML = `
+            <strong>AI:</strong> 
+            <span>Thinking</span>
+            <div class="loading-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        `;
+        chatMessages.appendChild(loadingElement);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        return loadingElement;
+    }
+
+    function removeLoadingIndicator(loadingElement) {
+        if (loadingElement) {
+            loadingElement.remove();
+        }
     }
 
     function createNewSession() {
