@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from .models import ChatSession, ChatInformation, AgentConfiguration
 from django.utils import timezone
+from urllib.parse import unquote
 from .core import generate_response
 
 # Create your views here.
@@ -26,14 +27,21 @@ def chat_ui(request):
 
 def handle_user_input(request):
     if request.method == "POST":
-        user_message = request.POST.get("message", "")
-        session_id = request.POST.get("session_id", None)
-        
+        user_message = unquote(request.POST.get("message", ""))
+        session_id = unquote(request.POST.get("session_id", None))
+
         # Get API settings from cookies
-        api_key = request.COOKIES.get("openai_api_key", None)
-        base_url = request.COOKIES.get("openai_base_url", None)
-        model = request.COOKIES.get("openai_model", "gpt-3.5-turbo")
-        
+        api_key = unquote(request.COOKIES.get("openai_api_key", None))
+        base_url = unquote(request.COOKIES.get("openai_base_url", None))
+        model = unquote(request.COOKIES.get("openai_model", "gpt-3.5-turbo"))
+
+        # Debug Print Everything
+        # print("User Message:", user_message)
+        # print("Session ID:", session_id)
+        # print("API Key:", api_key)
+        # print("Base URL:", base_url)
+        # print("Model:", model)
+
         # Get or create agent configuration
         agent_config, _ = AgentConfiguration.objects.get_or_create(
             name="default",

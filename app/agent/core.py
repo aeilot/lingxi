@@ -30,7 +30,7 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
         
         # Get model from agent configuration or use default
         model = agent_config.parameters.get("model", "gpt-3.5-turbo")
-        
+
         # Call OpenAI API
         response = client.chat.completions.create(
             model=model,
