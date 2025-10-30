@@ -356,6 +356,13 @@ def DecisionModule(session, agent_config, api_key=None, base_url=None):
             - reason: explanation for the decision
             - suggested_message: optional message to send (if action is 'continue' or 'new_topic')
     """
+    # Check for unread messages first
+    # If there are unread AI messages (messages sent by AI that user hasn't read yet),
+    # we should NOT send new proactive messages based on inactivity
+    unread_ai_messages = session.chat_infos.filter(is_agent=True, is_read=False)
+    has_unread_messages = unread_ai_messages.exists()
+    unread_count = unread_ai_messages.count()
+    
     # Get session summary and recent activity
     summary = session.summary or "No summary available"
     message_count = session.message_count
@@ -377,6 +384,16 @@ def DecisionModule(session, agent_config, api_key=None, base_url=None):
     
     time_since_activity = timezone.now() - session.last_activity_at
     minutes_inactive = time_since_activity.total_seconds() / 60
+    
+    # If there are unread messages, do NOT send new messages based on inactivity
+    # Only time-based scheduling should trigger messages in this case
+    if has_unread_messages:
+        return {
+            'action': 'wait',
+            'reason': f'User has {unread_count} unread message(s). Waiting for user to read them first.',
+            'suggested_message': None,
+            'unread_count': unread_count
+        }
     
     # If not enough time has passed, wait
     if minutes_inactive < inactivity_threshold:
@@ -422,13 +439,18 @@ def DecisionModule(session, agent_config, api_key=None, base_url=None):
         # This preference guides how eagerly the AI should initiate conversations
         user_preferences = agent_config.parameters.get('proactive_behavior', 'balanced')
         
+        # Add unread message information to prompt if applicable
+        unread_info = ""
+        if has_unread_messages:
+            unread_info = f"\nNote: User has {unread_count} unread AI message(s). This information is provided for context."
+        
         # Create decision prompt
         prompt = f"""You are analyzing a chat conversation to decide whether the AI should proactively continue the conversation.
 
 Current summary: {summary}
 Message count: {message_count}
 Minutes inactive: {minutes_inactive:.1f}
-User preference for proactivity: {user_preferences}
+User preference for proactivity: {user_preferences}{unread_info}
 
 Recent conversation:
 {conversation_text}
