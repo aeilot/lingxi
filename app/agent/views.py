@@ -224,7 +224,17 @@ def check_session_inactivity(request, session_id):
         agent_config = session.agent_configuration
         
         # Use DecisionModule to decide what to do
-        decision = DecisionModule(session, agent_config, api_key=api_key, base_url=base_url)
+        try:
+            decision = DecisionModule(session, agent_config, api_key=api_key, base_url=base_url)
+        except Exception as e:
+            # If DecisionModule fails, return a safe default response
+            return JsonResponse({
+                "session_id": session.id,
+                "action": "wait",
+                "reason": f"Error making decision: {str(e)}",
+                "suggested_message": None,
+                "minutes_inactive": (timezone.now() - session.last_activity_at).total_seconds() / 60 if session.last_activity_at else 0
+            })
         
         return JsonResponse({
             "session_id": session.id,

@@ -231,6 +231,8 @@ def DecisionModule(session, agent_config, api_key=None, base_url=None):
             conversation_text += f"{role}: {chat.message}\n"
         
         # Get user preferences from agent config
+        # proactive_behavior can be: 'conservative', 'balanced', 'aggressive'
+        # This preference guides how eagerly the AI should initiate conversations
         user_preferences = agent_config.parameters.get('proactive_behavior', 'balanced')
         
         # Create decision prompt
@@ -275,7 +277,15 @@ Respond ONLY with a JSON object in this exact format:
         
         # Parse JSON response
         import json
-        result = json.loads(result_text)
+        try:
+            result = json.loads(result_text)
+        except json.JSONDecodeError as e:
+            # If JSON parsing fails, return wait action with error details
+            return {
+                'action': 'wait',
+                'reason': f'Failed to parse AI response: {str(e)}',
+                'suggested_message': None
+            }
         
         # Validate response structure
         if 'action' not in result or result['action'] not in ['continue', 'new_topic', 'wait']:
