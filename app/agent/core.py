@@ -5,6 +5,20 @@ import openai
 from markdown_it import MarkdownIt
 import json
 
+# System prompt template for split message feature
+SPLIT_MESSAGE_SYSTEM_PROMPT = """You can optionally split your response into multiple messages for better readability.
+If you want to split your response, return ONLY a JSON object in this exact format:
+{"messages": ["first message", "second message", "third message"]}
+
+If you prefer to send a single message, just reply with plain text as normal.
+
+Important:
+- If using JSON format, the response MUST be valid JSON and nothing else
+- Each message in the array should be a complete thought or idea
+- Use this feature when the response naturally breaks into multiple parts (e.g., greeting + answer, or multiple steps)
+- Don't overuse it - only split when it improves clarity
+- Reply in the sender's language"""
+
 def generate_response(user_message, agent_config, session, api_key=None, base_url=None):
     """
     Generate a response from the OpenAI API based on user message and agent configuration.
@@ -36,18 +50,7 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
         if personality_prompt:
             system_message = personality_prompt + "\n\n"
         
-        system_message += """You can optionally split your response into multiple messages for better readability.
-If you want to split your response, return ONLY a JSON object in this exact format:
-{"messages": ["first message", "second message", "third message"]}
-
-If you prefer to send a single message, just reply with plain text as normal.
-
-Important:
-- If using JSON format, the response MUST be valid JSON and nothing else
-- Each message in the array should be a complete thought or idea
-- Use this feature when the response naturally breaks into multiple parts (e.g., greeting + answer, or multiple steps)
-- Don't overuse it - only split when it improves clarity
-- Reply in the sender's language"""
+        system_message += SPLIT_MESSAGE_SYSTEM_PROMPT
         
         messages.append({"role": "system", "content": system_message})
 

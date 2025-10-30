@@ -590,6 +590,10 @@ body {
 }
 
 /* Modern Personality Update Notification */
+:root {
+    --notification-slide-distance: 450px;
+}
+
 .personality-update-notification {
     position: fixed;
     top: 24px;
@@ -605,7 +609,7 @@ body {
     padding: 16px 20px;
     min-width: 320px;
     max-width: 400px;
-    transform: translateX(450px);
+    transform: translateX(var(--notification-slide-distance));
     opacity: 0;
     transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
@@ -616,7 +620,7 @@ body {
 }
 
 .personality-update-notification.hide {
-    transform: translateX(450px);
+    transform: translateX(var(--notification-slide-distance));
     opacity: 0;
     transition: all 0.3s ease-in;
 }
@@ -686,6 +690,7 @@ body {
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
     animation: slideInFromLeft 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
     position: relative;
+    padding-right: 50px; /* Make room for read indicator */
 }
 
 .proactive-message strong {
@@ -704,43 +709,68 @@ body {
     }
 }
 
-/* Red Dot Indicators */
-.new-message-dot {
-    display: inline-block;
-    width: 10px;
-    height: 10px;
+/* Read Receipt Indicators */
+.new-message-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
     background: linear-gradient(135deg, #ff3b30 0%, #ff0000 100%);
-    border-radius: 50%;
-    margin-left: 8px;
-    box-shadow: 0 0 8px rgba(255, 59, 48, 0.6);
+    color: white;
+    border-radius: 12px;
+    margin-left: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(255, 59, 48, 0.4);
     animation: fadeIn 0.3s ease-in;
+    transition: all 0.3s ease;
 }
 
-.new-message-dot.pulse {
+.new-message-badge.pulse {
     animation: pulse 2s ease-in-out infinite, fadeIn 0.3s ease-in;
 }
 
-.new-message-dot.fade-out {
+.new-message-badge.read {
+    background: linear-gradient(135deg, #34c759 0%, #30d158 100%);
+    box-shadow: 0 2px 8px rgba(52, 199, 89, 0.4);
+}
+
+.new-message-badge.fade-out {
     animation: fadeOut 0.5s ease-out forwards;
 }
 
-.message-red-dot {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    background: linear-gradient(135deg, #ff3b30 0%, #ff0000 100%);
-    border-radius: 50%;
-    margin-right: 8px;
-    box-shadow: 0 0 6px rgba(255, 59, 48, 0.6);
-    vertical-align: middle;
+.message-read-indicator {
+    position: absolute;
+    right: 12px;
+    bottom: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
 }
 
-.message-red-dot.pulse {
+.message-read-indicator.unread {
+    color: rgba(255, 255, 255, 0.6);
     animation: pulse 2s ease-in-out infinite;
 }
 
-.message-red-dot.fade-out {
-    animation: fadeOut 0.5s ease-out forwards;
+.message-read-indicator.read {
+    color: #34c759;
+    animation: checkmarkPop 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes checkmarkPop {
+    0% {
+        transform: scale(0);
+    }
+    50% {
+        transform: scale(1.2);
+    }
+    100% {
+        transform: scale(1);
+    }
 }
 
 @keyframes pulse {

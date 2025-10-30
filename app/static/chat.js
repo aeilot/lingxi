@@ -1,5 +1,9 @@
 // JavaScript for handling chat interactions
 
+// Constants
+const MESSAGE_DISPLAY_DELAY_MS = 300;
+const PROACTIVE_MESSAGE_ACK_DELAY_MS = 2000;
+
 /**
  * Get CSRF token from cookies
  * @param {string} name - The name of the cookie to retrieve
@@ -117,8 +121,10 @@ document.addEventListener("DOMContentLoaded", () => {
                             // Multiple messages - display each one with a slight delay for effect
                             data.messages.forEach((msgObj, index) => {
                                 setTimeout(() => {
-                                    appendMessage("AI", msgObj.message, "ai-message");
-                                }, index * 300); // 300ms delay between messages
+                                    // Ensure msgObj has the expected structure
+                                    const message = msgObj.message || msgObj;
+                                    appendMessage("AI", message, "ai-message");
+                                }, index * MESSAGE_DISPLAY_DELAY_MS);
                             });
                         } else if (data.response) {
                             // Single message (legacy format)
@@ -453,22 +459,22 @@ document.addEventListener("DOMContentLoaded", () => {
             .then((response) => response.json())
             .then((data) => {
                 if (data.has_new_messages && data.new_messages.length > 0) {
-                    // Display new proactive messages with red dot indicator and special styling
+                    // Display new proactive messages with read indicator and special styling
                     data.new_messages.forEach((msg, index) => {
                         setTimeout(() => {
                             const messageElement = appendMessage("AI (Proactive)", msg.message, "ai-message proactive-message");
-                            // Add red dot indicator to the message
-                            addRedDotToMessage(messageElement);
+                            // Add read indicator to the message
+                            addReadIndicatorToMessage(messageElement);
                         }, index * 400); // Stagger the display
                     });
                     
-                    // Show red dot indicator on session title
+                    // Show read indicator on session title
                     showNewMessageIndicator();
                     
                     // Acknowledge the messages after a delay
                     setTimeout(() => {
                         acknowledgeNewMessages(sessionId);
-                    }, 2000);
+                    }, PROACTIVE_MESSAGE_ACK_DELAY_MS);
                 }
             })
             .catch((error) => {
@@ -476,25 +482,24 @@ document.addEventListener("DOMContentLoaded", () => {
             });
     }
     
-    function addRedDotToMessage(messageElement) {
+    function addReadIndicatorToMessage(messageElement) {
         if (!messageElement) return;
         
-        // Create red dot indicator
-        const redDot = document.createElement('span');
-        redDot.className = 'message-red-dot';
-        redDot.title = 'New proactive message';
+        // Create read indicator (checkmark icon)
+        const readIndicator = document.createElement('span');
+        readIndicator.className = 'message-read-indicator unread';
+        readIndicator.innerHTML = '✓✓'; // Double checkmark for read receipt
+        readIndicator.title = 'Unread';
         
-        // Insert at the beginning of the message
-        messageElement.insertBefore(redDot, messageElement.firstChild);
+        // Append to the end of the message
+        messageElement.appendChild(readIndicator);
         
-        // Animate the dot
-        setTimeout(() => redDot.classList.add('pulse'), 100);
-        
-        // Remove after 5 seconds
+        // Mark as read after 3 seconds (simulate reading time)
         setTimeout(() => {
-            redDot.classList.add('fade-out');
-            setTimeout(() => redDot.remove(), 500);
-        }, 5000);
+            readIndicator.classList.remove('unread');
+            readIndicator.classList.add('read');
+            readIndicator.title = 'Read';
+        }, 3000);
     }
     
     function acknowledgeNewMessages(sessionId) {
@@ -516,18 +521,26 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     
     function showNewMessageIndicator() {
-        // Add a visual indicator (red dot) to the session title
+        // Add a visual indicator (badge) to the session title
         const sessionTitle = document.getElementById('session-title');
-        if (sessionTitle && !sessionTitle.querySelector('.new-message-dot')) {
-            const dot = document.createElement('span');
-            dot.className = 'new-message-dot pulse';
-            dot.title = 'New proactive message(s)';
-            sessionTitle.appendChild(dot);
+        if (sessionTitle && !sessionTitle.querySelector('.new-message-badge')) {
+            const badge = document.createElement('span');
+            badge.className = 'new-message-badge pulse';
+            badge.textContent = '✓✓';
+            badge.title = 'New proactive message(s) - Unread';
+            sessionTitle.appendChild(badge);
             
-            // Remove the dot after 10 seconds or when user sends a message
+            // Mark as read and remove the badge after 10 seconds
             setTimeout(() => {
-                dot.classList.add('fade-out');
-                setTimeout(() => dot.remove(), 500);
+                badge.classList.remove('pulse');
+                badge.classList.add('read');
+                badge.title = 'Messages read';
+                
+                // Remove completely after fade
+                setTimeout(() => {
+                    badge.classList.add('fade-out');
+                    setTimeout(() => badge.remove(), 500);
+                }, 2000);
             }, 10000);
         }
     }
