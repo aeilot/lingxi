@@ -3,9 +3,17 @@ from django.utils import timezone
 from django.db import models
 import openai
 from markdown_it import MarkdownIt
+import json
 
 def generate_response(user_message, agent_config, session, api_key=None, base_url=None):
-    """Generate a response from the OpenAI API based on user message and agent configuration."""
+    """
+    Generate a response from the OpenAI API based on user message and agent configuration.
+    
+    Returns:
+        dict or str: If the LLM returns valid JSON with split messages, returns a dict like:
+                     {"messages": ["msg1", "msg2", ...]}
+                     Otherwise returns a plain string response.
+    """
     # If no API key is provided, fall back to simulated response
     if not api_key:
         return f"Simulated response to: {user_message}"
@@ -23,8 +31,25 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
         
         # Add system message with personality prompt if configured
         personality_prompt = agent_config.parameters.get("personality_prompt", "")
+        system_message = ""
+        
         if personality_prompt:
-            messages.append({"role": "system", "content": personality_prompt + "\n Reply with the specified personality in mind. Reply with plain text and don't wrap it in a code block. Reply in the sender's language."})
+            system_message = personality_prompt + "\n\n"
+        
+        system_message += """You can optionally split your response into multiple messages for better readability.
+If you want to split your response, return ONLY a JSON object in this exact format:
+{"messages": ["first message", "second message", "third message"]}
+
+If you prefer to send a single message, just reply with plain text as normal.
+
+Important:
+- If using JSON format, the response MUST be valid JSON and nothing else
+- Each message in the array should be a complete thought or idea
+- Use this feature when the response naturally breaks into multiple parts (e.g., greeting + answer, or multiple steps)
+- Don't overuse it - only split when it improves clarity
+- Reply in the sender's language"""
+        
+        messages.append({"role": "system", "content": system_message})
 
         chat_history = session.chat_infos.order_by('-chat_date')[:20]
         # Reverse to get chronological order
@@ -44,14 +69,35 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
             messages=messages
         )
         text = response.choices[0].message.content
-        # print(text)
-        # md = (
-        #     MarkdownIt('commonmark', {'breaks':True,'html':False})
-        #     .enable('table')
-        # )
-        return text
-        # print(text)
-        # return text
+        
+        # Try to parse as JSON first to check if LLM returned split messages
+        try:
+            # Strip any markdown code block markers if present
+            cleaned_text = text.strip()
+            if cleaned_text.startswith("```json"):
+                cleaned_text = cleaned_text[7:]
+            if cleaned_text.startswith("```"):
+                cleaned_text = cleaned_text[3:]
+            if cleaned_text.endswith("```"):
+                cleaned_text = cleaned_text[:-3]
+            cleaned_text = cleaned_text.strip()
+            
+            # Try to parse as JSON
+            parsed = json.loads(cleaned_text)
+            
+            # Validate the structure
+            if isinstance(parsed, dict) and "messages" in parsed:
+                messages_list = parsed["messages"]
+                if isinstance(messages_list, list) and len(messages_list) > 0:
+                    # All items should be strings
+                    if all(isinstance(msg, str) for msg in messages_list):
+                        return {"messages": messages_list}
+            
+            # If structure is invalid, fall back to plain text
+            return text
+        except (json.JSONDecodeError, ValueError):
+            # Not JSON, return as plain text
+            return text
     
     except openai.AuthenticationError:
         return "Error calling OpenAI API: Invalid API key. Please check your settings."

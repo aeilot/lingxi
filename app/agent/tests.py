@@ -859,3 +859,224 @@ class ProactiveMessagingTestCase(TestCase):
             self.assertEqual(len(self.session.current_state['proactive_messages']), 1)
 
 
+class SplitMessageTestCase(TestCase):
+    """Test cases for the split message feature"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.client = Client()
+        self.agent_config = AgentConfiguration.objects.create(
+            name="test",
+            parameters={"model": "gpt-3.5-turbo", "personality_prompt": ""}
+        )
+        self.session = ChatSession.objects.create(
+            agent_configuration=self.agent_config
+        )
+    
+    def test_generate_response_returns_dict_for_json_response(self):
+        """Test that generate_response returns a dict when LLM returns JSON"""
+        from agent.core import generate_response
+        from unittest.mock import patch, MagicMock
+        
+        # Mock the OpenAI API call
+        with patch('agent.core.openai.OpenAI') as mock_openai:
+            mock_client = MagicMock()
+            mock_openai.return_value = mock_client
+            
+            # Mock the API response with JSON
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].message.content = '{"messages": ["Hello!", "How can I help you today?", "Let me know what you need."]}'
+            mock_client.chat.completions.create.return_value = mock_response
+            
+            result = generate_response(
+                "Hi there",
+                self.agent_config,
+                self.session,
+                api_key="test-key",
+                base_url="https://api.test.com"
+            )
+            
+            # Should return a dict
+            self.assertIsInstance(result, dict)
+            self.assertIn('messages', result)
+            self.assertEqual(len(result['messages']), 3)
+            self.assertEqual(result['messages'][0], "Hello!")
+            self.assertEqual(result['messages'][1], "How can I help you today?")
+    
+    def test_generate_response_returns_string_for_plain_text(self):
+        """Test that generate_response returns a string for plain text response"""
+        from agent.core import generate_response
+        from unittest.mock import patch, MagicMock
+        
+        # Mock the OpenAI API call
+        with patch('agent.core.openai.OpenAI') as mock_openai:
+            mock_client = MagicMock()
+            mock_openai.return_value = mock_client
+            
+            # Mock the API response with plain text
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].message.content = "This is a regular response without JSON formatting."
+            mock_client.chat.completions.create.return_value = mock_response
+            
+            result = generate_response(
+                "What is Python?",
+                self.agent_config,
+                self.session,
+                api_key="test-key",
+                base_url="https://api.test.com"
+            )
+            
+            # Should return a string
+            self.assertIsInstance(result, str)
+            self.assertIn("regular response", result)
+    
+    def test_generate_response_handles_invalid_json(self):
+        """Test that generate_response falls back to string for invalid JSON"""
+        from agent.core import generate_response
+        from unittest.mock import patch, MagicMock
+        
+        # Mock the OpenAI API call
+        with patch('agent.core.openai.OpenAI') as mock_openai:
+            mock_client = MagicMock()
+            mock_openai.return_value = mock_client
+            
+            # Mock the API response with invalid JSON
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].message.content = '{"messages": ["Missing closing bracket"'
+            mock_client.chat.completions.create.return_value = mock_response
+            
+            result = generate_response(
+                "Test",
+                self.agent_config,
+                self.session,
+                api_key="test-key",
+                base_url="https://api.test.com"
+            )
+            
+            # Should return the raw string when JSON parsing fails
+            self.assertIsInstance(result, str)
+    
+    def test_generate_response_strips_code_blocks(self):
+        """Test that generate_response handles JSON wrapped in code blocks"""
+        from agent.core import generate_response
+        from unittest.mock import patch, MagicMock
+        
+        # Mock the OpenAI API call
+        with patch('agent.core.openai.OpenAI') as mock_openai:
+            mock_client = MagicMock()
+            mock_openai.return_value = mock_client
+            
+            # Mock the API response with JSON in code blocks
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].message.content = '```json\n{"messages": ["First", "Second"]}\n```'
+            mock_client.chat.completions.create.return_value = mock_response
+            
+            result = generate_response(
+                "Test",
+                self.agent_config,
+                self.session,
+                api_key="test-key",
+                base_url="https://api.test.com"
+            )
+            
+            # Should successfully parse the JSON despite code blocks
+            self.assertIsInstance(result, dict)
+            self.assertIn('messages', result)
+            self.assertEqual(len(result['messages']), 2)
+    
+    def test_handle_user_input_with_split_messages(self):
+        """Test that handle_user_input creates multiple ChatInformation objects for split messages"""
+        from unittest.mock import patch
+        
+        # Mock generate_response to return split messages
+        with patch('agent.views.generate_response') as mock_generate:
+            mock_generate.return_value = {
+                "messages": ["Message 1", "Message 2", "Message 3"]
+            }
+            
+            response = self.client.post('/handle_user_input', {
+                'message': 'Test split message',
+                'session_id': self.session.id
+            })
+            
+            self.assertEqual(response.status_code, 200)
+            data = json.loads(response.content)
+            
+            # Check response contains messages array
+            self.assertIn('messages', data)
+            self.assertEqual(len(data['messages']), 3)
+            self.assertEqual(data['messages'][0]['message'], "Message 1")
+            self.assertEqual(data['messages'][1]['message'], "Message 2")
+            self.assertEqual(data['messages'][2]['message'], "Message 3")
+            
+            # Verify all message IDs are present
+            for msg in data['messages']:
+                self.assertIn('id', msg)
+                self.assertIsNotNone(msg['id'])
+            
+            # Refresh session and check message count
+            self.session.refresh_from_db()
+            # 1 user message + 3 AI messages = 4 total
+            self.assertEqual(self.session.message_count, 4)
+    
+    def test_handle_user_input_with_single_message_backward_compatibility(self):
+        """Test that handle_user_input maintains backward compatibility with single messages"""
+        from unittest.mock import patch
+        
+        # Mock generate_response to return a plain string
+        with patch('agent.views.generate_response') as mock_generate:
+            mock_generate.return_value = "Single message response"
+            
+            response = self.client.post('/handle_user_input', {
+                'message': 'Test single message',
+                'session_id': self.session.id
+            })
+            
+            self.assertEqual(response.status_code, 200)
+            data = json.loads(response.content)
+            
+            # Check legacy format is maintained
+            self.assertIn('response', data)
+            self.assertEqual(data['response'], "Single message response")
+            self.assertIn('ai_message_id', data)
+            
+            # messages array should not be present for single messages
+            self.assertNotIn('messages', data)
+    
+    def test_split_messages_stored_separately_in_database(self):
+        """Test that split messages are stored as separate ChatInformation objects"""
+        from unittest.mock import patch
+        
+        # Mock generate_response to return split messages
+        with patch('agent.views.generate_response') as mock_generate:
+            mock_generate.return_value = {
+                "messages": ["Part 1", "Part 2"]
+            }
+            
+            # Count messages before
+            messages_before = ChatInformation.objects.filter(is_agent=True).count()
+            
+            response = self.client.post('/handle_user_input', {
+                'message': 'Test',
+                'session_id': self.session.id
+            })
+            
+            self.assertEqual(response.status_code, 200)
+            
+            # Count messages after
+            messages_after = ChatInformation.objects.filter(is_agent=True).count()
+            
+            # Should have created 2 new AI messages
+            self.assertEqual(messages_after - messages_before, 2)
+            
+            # Verify the messages are linked to the session
+            ai_messages = self.session.chat_infos.filter(is_agent=True).order_by('chat_date')
+            self.assertEqual(ai_messages.count(), 2)
+            self.assertEqual(ai_messages[0].message, "Part 1")
+            self.assertEqual(ai_messages[1].message, "Part 2")
+
+

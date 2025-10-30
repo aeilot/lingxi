@@ -69,13 +69,31 @@ def handle_user_input(request):
         # Generate response using OpenAI API or simulated response
         model_response = generate_response(user_message, agent_config, session, api_key=api_key, base_url=base_url)
         
-        # Save AI response
-        ai_chat = ChatInformation.objects.create(
-            message=model_response,
-            is_user=False,
-            is_agent=True
-        )
-        session.chat_infos.add(ai_chat)
+        # Handle split messages or single message
+        ai_message_ids = []
+        messages_list = []
+        
+        if isinstance(model_response, dict) and "messages" in model_response:
+            # LLM returned split messages
+            for msg_text in model_response["messages"]:
+                ai_chat = ChatInformation.objects.create(
+                    message=msg_text,
+                    is_user=False,
+                    is_agent=True
+                )
+                session.chat_infos.add(ai_chat)
+                ai_message_ids.append(ai_chat.id)
+                messages_list.append(msg_text)
+        else:
+            # Single message (plain text)
+            ai_chat = ChatInformation.objects.create(
+                message=model_response,
+                is_user=False,
+                is_agent=True
+            )
+            session.chat_infos.add(ai_chat)
+            ai_message_ids.append(ai_chat.id)
+            messages_list.append(model_response)
         
         # Update message count and last activity time
         session.message_count = session.chat_infos.count()
@@ -125,12 +143,26 @@ def handle_user_input(request):
         
         session.save()
         
+        # Build response data
         response_data = {
-            "response": model_response,
             "session_id": session.id,
             "user_message_id": user_chat.id,
-            "ai_message_id": ai_chat.id
         }
+        
+        # Support both old single-message format and new split-message format
+        if len(messages_list) == 1:
+            # Single message - use legacy format for backward compatibility
+            response_data["response"] = messages_list[0]
+            response_data["ai_message_id"] = ai_message_ids[0]
+        else:
+            # Multiple messages - new format
+            response_data["messages"] = [
+                {"id": msg_id, "message": msg_text} 
+                for msg_id, msg_text in zip(ai_message_ids, messages_list)
+            ]
+            # Also include the first message in 'response' for partial backward compatibility
+            response_data["response"] = messages_list[0]
+            response_data["ai_message_id"] = ai_message_ids[0]
         
         # Include updated summary if it was changed
         if summary_updated:
