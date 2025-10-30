@@ -4,7 +4,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from .models import ChatSession, ChatInformation, AgentConfiguration
 from django.utils import timezone
 from urllib.parse import unquote
-from .core import generate_response
+from .core import generate_response, generate_session_summary
 from django.conf import settings
 
 
@@ -76,6 +76,16 @@ def handle_user_input(request):
         )
         session.chat_infos.add(ai_chat)
         
+        # Update message count
+        session.message_count = session.chat_infos.count()
+        
+        # Update summary every 10 messages
+        if session.message_count % 10 == 0:
+            summary = generate_session_summary(session, agent_config, api_key=api_key, base_url=base_url)
+            session.summary = summary
+        
+        session.save()
+        
         return JsonResponse({
             "response": model_response,
             "session_id": session.id,
@@ -132,11 +142,14 @@ def list_sessions(request):
         message_count = session.chat_infos.count()
         last_message = session.chat_infos.order_by('-chat_date').first()
         
+        # Use summary if available, otherwise fall back to last message
+        display_text = session.summary if session.summary else (last_message.message if last_message else "No messages yet")
+        
         sessions_data.append({
             "id": session.id,
             "started_at": session.started_at.isoformat(),
             "message_count": message_count,
-            "last_message": last_message.message if last_message else None,
+            "summary": display_text,
             "last_message_date": last_message.chat_date.isoformat() if last_message else None
         })
     

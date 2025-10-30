@@ -206,7 +206,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     
                     sessionItem.innerHTML = `
                         <div class="session-time">${timeStr}</div>
-                        <div class="session-preview">${session.last_message || "No messages yet"}</div>
+                        <div class="session-preview">${session.summary || "No messages yet"}</div>
                         <div class="session-count">${session.message_count} message(s)</div>
                     `;
 
