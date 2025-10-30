@@ -301,7 +301,8 @@ class DecisionModuleTestCase(TestCase):
             ai_msg = ChatInformation.objects.create(
                 message=f"AI response {i}",
                 is_user=False,
-                is_agent=True
+                is_agent=True,
+                is_read=True  # Mark as read so DecisionModule can proceed
             )
             self.session.chat_infos.add(ai_msg)
         
@@ -1080,3 +1081,201 @@ class SplitMessageTestCase(TestCase):
             self.assertEqual(ai_messages[1].message, "Part 2")
 
 
+
+
+class ReadIndicatorTestCase(TestCase):
+    """Test cases for the read indicator (已读回执) feature"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.client = Client()
+        self.agent_config = AgentConfiguration.objects.create(
+            name="test",
+            parameters={"model": "gpt-3.5-turbo", "personality_prompt": ""},
+            timings={"inactivity_check_minutes": 5}
+        )
+        self.session = ChatSession.objects.create(
+            agent_configuration=self.agent_config
+        )
+    
+    def test_chat_information_has_is_read_field(self):
+        """Test that ChatInformation model has is_read field"""
+        msg = ChatInformation.objects.create(
+            message="Test message",
+            is_user=False,
+            is_agent=True
+        )
+        self.assertFalse(msg.is_read)  # Default should be False
+        
+        msg.is_read = True
+        msg.save()
+        msg.refresh_from_db()
+        self.assertTrue(msg.is_read)
+    
+    def test_decision_module_waits_when_unread_messages_exist(self):
+        """Test that DecisionModule returns 'wait' when there are unread AI messages"""
+        from agent.core import DecisionModule
+        
+        # Set session as inactive for 10 minutes
+        past_time = timezone.now() - timedelta(minutes=10)
+        self.session.last_activity_at = past_time
+        self.session.message_count = 10
+        self.session.save()
+        
+        # Update directly to avoid auto_now
+        ChatSession.objects.filter(id=self.session.id).update(last_activity_at=past_time)
+        self.session.refresh_from_db()
+        
+        # Add an unread AI message
+        unread_msg = ChatInformation.objects.create(
+            message="Unread AI message",
+            is_user=False,
+            is_agent=True,
+            is_read=False
+        )
+        self.session.chat_infos.add(unread_msg)
+        
+        # DecisionModule should return 'wait' because of unread messages
+        decision = DecisionModule(self.session, self.agent_config, api_key=None)
+        
+        self.assertEqual(decision['action'], 'wait')
+        self.assertIn('unread', decision['reason'].lower())
+        self.assertEqual(decision.get('unread_count'), 1)
+    
+    def test_decision_module_proceeds_when_all_messages_read(self):
+        """Test that DecisionModule proceeds normally when all messages are read"""
+        from agent.core import DecisionModule
+        
+        # Set session as inactive for 10 minutes
+        past_time = timezone.now() - timedelta(minutes=10)
+        self.session.last_activity_at = past_time
+        self.session.message_count = 10
+        self.session.save()
+        
+        # Update directly to avoid auto_now
+        ChatSession.objects.filter(id=self.session.id).update(last_activity_at=past_time)
+        self.session.refresh_from_db()
+        
+        # Add a read AI message
+        read_msg = ChatInformation.objects.create(
+            message="Read AI message",
+            is_user=False,
+            is_agent=True,
+            is_read=True
+        )
+        self.session.chat_infos.add(read_msg)
+        
+        # DecisionModule should not wait due to unread messages
+        decision = DecisionModule(self.session, self.agent_config, api_key=None)
+        
+        # Should return 'continue' based on fallback logic (not 'wait' due to unread)
+        self.assertEqual(decision['action'], 'continue')
+    
+    def test_messages_marked_read_on_user_input(self):
+        """Test that AI messages are marked as read when user sends a message"""
+        # Add unread AI messages (these represent old messages)
+        old_message_ids = []
+        for i in range(3):
+            msg = ChatInformation.objects.create(
+                message=f"AI message {i}",
+                is_user=False,
+                is_agent=True,
+                is_read=False
+            )
+            self.session.chat_infos.add(msg)
+            old_message_ids.append(msg.id)
+        
+        # User sends a message (this will create a new AI response)
+        response = self.client.post('/handle_user_input', {
+            'message': 'User reply',
+            'session_id': self.session.id
+        })
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Previous AI messages should be marked as read
+        for msg_id in old_message_ids:
+            msg = ChatInformation.objects.get(id=msg_id)
+            self.assertTrue(msg.is_read, f"Old message {msg_id} should be marked as read")
+        
+        # The NEW AI response should be unread (it just arrived)
+        new_ai_messages = self.session.chat_infos.filter(
+            is_agent=True
+        ).exclude(id__in=old_message_ids)
+        self.assertTrue(new_ai_messages.exists(), "Should have a new AI response")
+        for new_msg in new_ai_messages:
+            self.assertFalse(new_msg.is_read, "New AI response should be unread")
+    
+    def test_messages_marked_read_on_session_history_load(self):
+        """Test that AI messages are marked as read when session history is loaded"""
+        # Add unread AI messages
+        for i in range(3):
+            msg = ChatInformation.objects.create(
+                message=f"AI message {i}",
+                is_user=False,
+                is_agent=True,
+                is_read=False
+            )
+            self.session.chat_infos.add(msg)
+        
+        # Load session history
+        response = self.client.get(f'/api/sessions/{self.session.id}/history')
+        self.assertEqual(response.status_code, 200)
+        
+        # All AI messages should be marked as read
+        self.session.refresh_from_db()
+        unread_count = self.session.chat_infos.filter(is_agent=True, is_read=False).count()
+        self.assertEqual(unread_count, 0)
+    
+    def test_messages_marked_read_on_acknowledge(self):
+        """Test that AI messages are marked as read when acknowledged"""
+        # Add unread AI messages
+        for i in range(3):
+            msg = ChatInformation.objects.create(
+                message=f"AI message {i}",
+                is_user=False,
+                is_agent=True,
+                is_read=False
+            )
+            self.session.chat_infos.add(msg)
+        
+        # Acknowledge messages
+        response = self.client.post(f'/api/sessions/{self.session.id}/acknowledge-messages')
+        self.assertEqual(response.status_code, 200)
+        
+        # All AI messages should be marked as read
+        self.session.refresh_from_db()
+        unread_count = self.session.chat_infos.filter(is_agent=True, is_read=False).count()
+        self.assertEqual(unread_count, 0)
+    
+    def test_check_new_messages_includes_read_status(self):
+        """Test that check_new_messages endpoint returns read status"""
+        # Create a proactive message
+        proactive_msg = ChatInformation.objects.create(
+            message="Proactive message",
+            is_user=False,
+            is_agent=True,
+            is_agent_growth=True,
+            is_read=False
+        )
+        self.session.chat_infos.add(proactive_msg)
+        
+        self.session.current_state = {
+            'proactive_messages': [{
+                'message_id': proactive_msg.id,
+                'timestamp': timezone.now().isoformat(),
+                'action': 'continue',
+                'reason': 'Test'
+            }]
+        }
+        self.session.save()
+        
+        # Check for new messages
+        response = self.client.get(f'/api/sessions/{self.session.id}/new-messages')
+        self.assertEqual(response.status_code, 200)
+        
+        data = json.loads(response.content)
+        self.assertTrue(data['has_new_messages'])
+        self.assertEqual(len(data['new_messages']), 1)
+        self.assertIn('is_read', data['new_messages'][0])
+        self.assertFalse(data['new_messages'][0]['is_read'])
