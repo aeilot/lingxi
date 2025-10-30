@@ -137,13 +137,6 @@ Please provide a brief summary (1-2 sentences, max 100 characters) that captures
             return first_user_msg.message[:50] + "..." if len(first_user_msg.message) > 50 else first_user_msg.message
         return "Chat session"
 
-def create_summary(session):
-    """Generate a summary of the chat session."""
-    messages = session.chat_infos.order_by('timestamp').values_list('message', flat=True)
-    # do something
-    summary = " | ".join(messages[:5])  # Simple summary: first 5 messages concatenated
-    return summary
-
 def should_update_agent_config(old_config, new_config):
     """Determine if the agent configuration needs to be updated."""
     # do something
