@@ -145,13 +145,15 @@ def generate_session_summary(session, agent_config, api_key=None, base_url=None)
         # Create summarization prompt
         existing_summary = session.summary or ""
         if existing_summary:
-            prompt = f"""You are summarizing a chat conversation. Here is the existing summary:
+            prompt = f"""
+            你是一个主题生成助手，负责根据最近的对话生成一个当前对话的主题。
+
+最近的对话记录：
 "{existing_summary}"
 
-Here are the recent messages from the conversation:
-{conversation_text}
+请提供一个更新后的主题，包含新消息。主题应该简洁（1-2句话，最多100个字符），捕捉对话的主要内容。只返回主题文本，不要包含其他内容。
 
-Please provide an updated summary that incorporates the new messages. The summary should be brief (1-2 sentences, max 100 characters) and capture the main topic of the conversation. Return only the summary text, nothing else."""
+输出格式：直接输出主题字符串。"""
         else:
             prompt = f"""You are summarizing a chat conversation. Here are the messages:
 {conversation_text}
