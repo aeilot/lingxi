@@ -119,6 +119,11 @@ document.addEventListener("DOMContentLoaded", () => {
                             updateSessionTitle();
                             loadSessions(); // Refresh session list
                         }
+                        
+                        // If summary was updated, refresh the session list to show new summary
+                        if (data.summary_updated) {
+                            loadSessions();
+                        }
                     } else {
                         appendMessage("Error", "Failed to get a response from the server.", "error-message");
                     }
@@ -355,4 +360,40 @@ document.addEventListener("DOMContentLoaded", () => {
                 alert("An error occurred while clearing.");
             });
     }
+    
+    // Periodically check for session inactivity and proactive suggestions
+    let inactivityCheckInterval = null;
+    
+    function startInactivityMonitoring() {
+        // Clear any existing interval
+        if (inactivityCheckInterval) {
+            clearInterval(inactivityCheckInterval);
+        }
+        
+        // Check every 2 minutes for inactivity
+        inactivityCheckInterval = setInterval(() => {
+            if (currentSessionId) {
+                checkSessionInactivity(currentSessionId);
+            }
+        }, 120000); // 2 minutes in milliseconds
+    }
+    
+    function checkSessionInactivity(sessionId) {
+        fetch(`/api/sessions/${sessionId}/inactivity`)
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.action === 'continue' || data.action === 'new_topic') {
+                    // Display the suggested message as a proactive AI message
+                    if (data.suggested_message) {
+                        appendMessage("AI (Proactive)", data.suggested_message, "ai-message proactive-message");
+                    }
+                }
+            })
+            .catch((error) => {
+                console.error("Error checking inactivity:", error);
+            });
+    }
+    
+    // Start monitoring when a session is active
+    startInactivityMonitoring();
 });

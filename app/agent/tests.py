@@ -1,8 +1,10 @@
 from django.test import TestCase, Client
 from django.urls import reverse
 from agent.models import ChatSession, ChatInformation, AgentConfiguration
-from agent.core import generate_session_summary
+from agent.core import generate_session_summary, DecisionModule
 from unittest.mock import patch, MagicMock
+from django.utils import timezone
+from datetime import timedelta
 import json
 
 
@@ -197,3 +199,210 @@ class ChatSessionSummaryTestCase(TestCase):
             self.assertEqual(self.session.message_count, 10)
             self.assertIsNotNone(self.session.summary)
             self.assertEqual(self.session.summary, "Updated summary")
+
+
+class DecisionModuleTestCase(TestCase):
+    """Test cases for the DecisionModule feature"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.agent_config = AgentConfiguration.objects.create(
+            name="test",
+            parameters={"model": "gpt-3.5-turbo", "personality_prompt": ""},
+            timings={"inactivity_check_minutes": 5}
+        )
+        self.session = ChatSession.objects.create(
+            agent_configuration=self.agent_config
+        )
+    
+    def test_decision_module_wait_when_not_inactive(self):
+        """Test that DecisionModule returns 'wait' when session is not inactive enough"""
+        # Set last activity to just 2 minutes ago
+        past_time = timezone.now() - timedelta(minutes=2)
+        self.session.last_activity_at = past_time
+        self.session.save()
+        
+        # Update directly to avoid auto_now
+        ChatSession.objects.filter(id=self.session.id).update(last_activity_at=past_time)
+        self.session.refresh_from_db()
+        
+        decision = DecisionModule(self.session, self.agent_config)
+        
+        self.assertEqual(decision['action'], 'wait')
+        self.assertIn('threshold', decision['reason'].lower())
+    
+    def test_decision_module_wait_when_no_activity(self):
+        """Test that DecisionModule returns 'wait' when no activity recorded"""
+        self.session.last_activity_at = None
+        self.session.save()
+        
+        decision = DecisionModule(self.session, self.agent_config)
+        
+        self.assertEqual(decision['action'], 'wait')
+        self.assertIn('no activity', decision['reason'].lower())
+    
+    def test_decision_module_without_api_key_short_conversation(self):
+        """Test DecisionModule fallback behavior with short conversation"""
+        # Set last activity to 10 minutes ago
+        past_time = timezone.now() - timedelta(minutes=10)
+        self.session.last_activity_at = past_time
+        self.session.message_count = 3
+        self.session.save()
+        
+        # Update directly to avoid auto_now
+        ChatSession.objects.filter(id=self.session.id).update(last_activity_at=past_time)
+        self.session.refresh_from_db()
+        
+        decision = DecisionModule(self.session, self.agent_config, api_key=None)
+        
+        self.assertEqual(decision['action'], 'wait')
+        self.assertIn('too short', decision['reason'].lower())
+    
+    def test_decision_module_without_api_key_long_conversation(self):
+        """Test DecisionModule fallback behavior with longer conversation"""
+        # Set last activity to 10 minutes ago
+        past_time = timezone.now() - timedelta(minutes=10)
+        self.session.last_activity_at = past_time
+        self.session.message_count = 10
+        self.session.summary = "Discussion about Python programming"
+        self.session.save()
+        
+        # Update directly to avoid auto_now
+        ChatSession.objects.filter(id=self.session.id).update(last_activity_at=past_time)
+        self.session.refresh_from_db()
+        
+        decision = DecisionModule(self.session, self.agent_config, api_key=None)
+        
+        self.assertEqual(decision['action'], 'continue')
+        self.assertIsNotNone(decision['suggested_message'])
+    
+    def test_decision_module_with_mocked_api(self):
+        """Test DecisionModule with mocked OpenAI API"""
+        # Set last activity to 10 minutes ago
+        past_time = timezone.now() - timedelta(minutes=10)
+        self.session.last_activity_at = past_time
+        self.session.message_count = 8
+        self.session.summary = "Discussion about machine learning"
+        self.session.save()
+        
+        # Update directly to avoid auto_now
+        ChatSession.objects.filter(id=self.session.id).update(last_activity_at=past_time)
+        self.session.refresh_from_db()
+        
+        # Add some chat messages
+        for i in range(4):
+            user_msg = ChatInformation.objects.create(
+                message=f"User question {i}",
+                is_user=True,
+                is_agent=False
+            )
+            self.session.chat_infos.add(user_msg)
+            
+            ai_msg = ChatInformation.objects.create(
+                message=f"AI response {i}",
+                is_user=False,
+                is_agent=True
+            )
+            self.session.chat_infos.add(ai_msg)
+        
+        # Mock the OpenAI API call
+        with patch('agent.core.openai.OpenAI') as mock_openai:
+            mock_client = MagicMock()
+            mock_openai.return_value = mock_client
+            
+            # Mock the API response
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].message.content = '{"action": "continue", "reason": "Natural follow-up opportunity", "suggested_message": "Would you like to explore this topic further?"}'
+            mock_client.chat.completions.create.return_value = mock_response
+            
+            decision = DecisionModule(
+                self.session, 
+                self.agent_config, 
+                api_key="test-key",
+                base_url="https://api.test.com"
+            )
+            
+            self.assertEqual(decision['action'], 'continue')
+            self.assertEqual(decision['reason'], 'Natural follow-up opportunity')
+            self.assertIsNotNone(decision['suggested_message'])
+    
+    def test_check_session_inactivity_endpoint(self):
+        """Test the check_session_inactivity API endpoint"""
+        # Set last activity to 10 minutes ago (save first, then update with raw SQL to bypass auto_now)
+        past_time = timezone.now() - timedelta(minutes=10)
+        self.session.last_activity_at = past_time
+        self.session.message_count = 10
+        self.session.save()
+        
+        # Update directly using QuerySet update to avoid auto_now
+        ChatSession.objects.filter(id=self.session.id).update(last_activity_at=past_time)
+        
+        response = self.client.get(f'/api/sessions/{self.session.id}/inactivity')
+        self.assertEqual(response.status_code, 200)
+        
+        data = json.loads(response.content)
+        self.assertIn('action', data)
+        self.assertIn('reason', data)
+        self.assertIn('minutes_inactive', data)
+        # Should be around 10 minutes (allow some variance for test execution time)
+        self.assertGreater(data['minutes_inactive'], 9)
+    
+    def test_get_session_summary_endpoint(self):
+        """Test the get_session_summary API endpoint"""
+        self.session.summary = "Test summary text"
+        self.session.message_count = 15
+        self.session.save()
+        
+        response = self.client.get(f'/api/sessions/{self.session.id}/summary')
+        self.assertEqual(response.status_code, 200)
+        
+        data = json.loads(response.content)
+        self.assertEqual(data['summary'], "Test summary text")
+        self.assertEqual(data['message_count'], 15)
+    
+    def test_last_activity_at_field_exists(self):
+        """Test that ChatSession has last_activity_at field"""
+        # Initially None for a new session
+        self.assertIsNone(self.session.last_activity_at)
+        
+        # Test that it can be set manually
+        now = timezone.now()
+        self.session.last_activity_at = now
+        self.session.save()
+        
+        self.session.refresh_from_db()
+        self.assertEqual(self.session.last_activity_at, now)
+    
+    def test_summary_update_response_includes_flag(self):
+        """Test that handle_user_input response includes summary_updated flag"""
+        # Add messages to get to 8 first
+        for i in range(8):
+            msg = ChatInformation.objects.create(
+                message=f"Message {i}",
+                is_user=(i % 2 == 0),
+                is_agent=(i % 2 == 1)
+            )
+            self.session.chat_infos.add(msg)
+        
+        self.session.message_count = 8
+        self.session.save()
+        
+        # Mock the summary generation
+        with patch('agent.views.generate_session_summary') as mock_summary:
+            mock_summary.return_value = "Generated summary"
+            
+            # This should trigger a summary update (message count 8 + 2 = 10)
+            response = self.client.post('/handle_user_input', {
+                'message': 'Test message',
+                'session_id': self.session.id
+            })
+            
+            self.assertEqual(response.status_code, 200)
+            data = json.loads(response.content)
+            
+            # Check that summary_updated flag is present
+            self.assertIn('summary_updated', data)
+            self.assertTrue(data['summary_updated'])
+            self.assertIn('summary', data)
+            self.assertEqual(data['summary'], "Generated summary")

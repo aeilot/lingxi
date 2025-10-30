@@ -4,8 +4,9 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from .models import ChatSession, ChatInformation, AgentConfiguration
 from django.utils import timezone
 from urllib.parse import unquote
-from .core import generate_response, generate_session_summary
+from .core import generate_response, generate_session_summary, DecisionModule
 from django.conf import settings
+from datetime import timedelta
 
 
 # Create your views here.
@@ -76,22 +77,32 @@ def handle_user_input(request):
         )
         session.chat_infos.add(ai_chat)
         
-        # Update message count
+        # Update message count and last activity time
         session.message_count = session.chat_infos.count()
+        session.last_activity_at = timezone.now()
         
         # Update summary every 10 messages
+        summary_updated = False
         if session.message_count % 10 == 0:
             summary = generate_session_summary(session, agent_config, api_key=api_key, base_url=base_url)
             session.summary = summary
+            summary_updated = True
         
         session.save()
         
-        return JsonResponse({
+        response_data = {
             "response": model_response,
             "session_id": session.id,
             "user_message_id": user_chat.id,
             "ai_message_id": ai_chat.id
-        })
+        }
+        
+        # Include updated summary if it was changed
+        if summary_updated:
+            response_data["summary_updated"] = True
+            response_data["summary"] = session.summary
+        
+        return JsonResponse(response_data)
     return JsonResponse({"error": "Invalid request method."}, status=400)
 
 def create_session(request):
@@ -199,4 +210,53 @@ def get_personality_prompt(request):
     return JsonResponse({
         "personality_prompt": personality_prompt
     })
+
+def check_session_inactivity(request, session_id):
+    """Check if a session is inactive and should receive a proactive message"""
+    try:
+        session = ChatSession.objects.get(id=session_id)
+        
+        # Get API settings
+        api_key = settings.OPENAI_API_KEY
+        base_url = settings.OPENAI_BASE_URL
+        
+        # Get or create agent configuration
+        agent_config = session.agent_configuration
+        
+        # Use DecisionModule to decide what to do
+        try:
+            decision = DecisionModule(session, agent_config, api_key=api_key, base_url=base_url)
+        except Exception as e:
+            # If DecisionModule fails, return a safe default response
+            return JsonResponse({
+                "session_id": session.id,
+                "action": "wait",
+                "reason": f"Error making decision: {str(e)}",
+                "suggested_message": None,
+                "minutes_inactive": (timezone.now() - session.last_activity_at).total_seconds() / 60 if session.last_activity_at else 0
+            })
+        
+        return JsonResponse({
+            "session_id": session.id,
+            "action": decision.get("action"),
+            "reason": decision.get("reason"),
+            "suggested_message": decision.get("suggested_message"),
+            "minutes_inactive": (timezone.now() - session.last_activity_at).total_seconds() / 60 if session.last_activity_at else 0
+        })
+    except ChatSession.DoesNotExist:
+        return JsonResponse({"error": "Session not found."}, status=404)
+
+def get_session_summary(request, session_id):
+    """Get the current summary for a session"""
+    try:
+        session = ChatSession.objects.get(id=session_id)
+        
+        return JsonResponse({
+            "session_id": session.id,
+            "summary": session.summary or "No summary yet",
+            "message_count": session.message_count,
+            "last_activity_at": session.last_activity_at.isoformat() if session.last_activity_at else None
+        })
+    except ChatSession.DoesNotExist:
+        return JsonResponse({"error": "Session not found."}, status=404)
 
