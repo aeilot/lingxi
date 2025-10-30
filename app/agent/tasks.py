@@ -16,7 +16,7 @@ def check_all_sessions_inactivity_task():
     Check all active sessions for inactivity and perform necessary actions.
     This task is called periodically by Celery Beat.
     """
-    from agent.models import ChatSession
+    from agent.models import ChatSession, ChatInformation
     from agent.core import DecisionModule
     
     logger.info("Running Celery task: check_all_sessions_inactivity")
@@ -43,6 +43,40 @@ def check_all_sessions_inactivity_task():
                     try:
                         decision = DecisionModule(session, agent_config, api_key=api_key, base_url=base_url)
                         logger.info(f"Decision for session {session.id}: {decision.get('action')} - {decision.get('reason')}")
+                        
+                        # If decision is to send a message, actually send it
+                        if decision.get('action') in ['continue', 'new_topic'] and decision.get('suggested_message'):
+                            # Create and save the proactive message
+                            proactive_message = ChatInformation.objects.create(
+                                message=decision.get('suggested_message'),
+                                is_user=False,
+                                is_agent=True,
+                                is_agent_growth=True,  # Mark as proactive/growth message
+                                metadata={'proactive': True, 'action': decision.get('action')}
+                            )
+                            session.chat_infos.add(proactive_message)
+                            
+                            # Update session state to indicate new proactive message
+                            if session.current_state is None:
+                                session.current_state = {}
+                            
+                            if 'proactive_messages' not in session.current_state:
+                                session.current_state['proactive_messages'] = []
+                            
+                            session.current_state['proactive_messages'].append({
+                                'message_id': proactive_message.id,
+                                'timestamp': timezone.now().isoformat(),
+                                'action': decision.get('action'),
+                                'reason': decision.get('reason')
+                            })
+                            
+                            # Update message count but don't update last_activity_at
+                            # (we want to track user activity, not proactive messages)
+                            session.message_count = session.chat_infos.count()
+                            session.save()
+                            
+                            logger.info(f"Sent proactive message to session {session.id}: {decision.get('suggested_message')[:50]}...")
+                            
                     except Exception as e:
                         logger.error(f"Error in DecisionModule for session {session.id}: {str(e)}")
                         
