@@ -4,7 +4,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from .models import ChatSession, ChatInformation, AgentConfiguration
 from django.utils import timezone
 from urllib.parse import unquote
-from .core import generate_response, generate_session_summary, DecisionModule
+from .core import generate_response, generate_session_summary, DecisionModule, decide_personality_update
 from django.conf import settings
 from datetime import timedelta
 
@@ -88,6 +88,41 @@ def handle_user_input(request):
             session.summary = summary
             summary_updated = True
         
+        # Check for personality update every 20 messages
+        personality_updated = False
+        personality_suggestion = None
+        if session.message_count % 20 == 0 and session.message_count >= 20:
+            # Check if we should suggest or auto-apply a personality update
+            decision = decide_personality_update(session, agent_config, api_key=api_key, base_url=base_url)
+            
+            # Store the decision in session state
+            if session.current_state is None:
+                session.current_state = {}
+            
+            session.current_state['last_personality_check'] = timezone.now().isoformat()
+            
+            # Auto-apply if confidence is high (> 0.8)
+            CONFIDENCE_THRESHOLD = 0.8
+            if decision.get('should_update') and decision.get('confidence', 0) > CONFIDENCE_THRESHOLD:
+                # Automatically apply the personality update
+                suggested_personality = decision.get('suggested_personality')
+                if suggested_personality:
+                    agent_config.parameters["personality_prompt"] = suggested_personality
+                    agent_config.save()
+                    personality_updated = True
+                    # Log the auto-update in session state
+                    session.current_state['last_personality_auto_update'] = {
+                        'timestamp': timezone.now().isoformat(),
+                        'personality': suggested_personality,
+                        'reason': decision.get('reason'),
+                        'confidence': decision.get('confidence')
+                    }
+            else:
+                # Store suggestion for manual review if confidence is lower
+                if decision.get('should_update'):
+                    session.current_state['personality_update_suggestion'] = decision
+                    personality_suggestion = decision
+        
         session.save()
         
         response_data = {
@@ -101,6 +136,13 @@ def handle_user_input(request):
         if summary_updated:
             response_data["summary_updated"] = True
             response_data["summary"] = session.summary
+        
+        # Include personality update information
+        if personality_updated:
+            response_data["personality_updated"] = True
+            response_data["personality_prompt"] = agent_config.parameters.get("personality_prompt")
+        elif personality_suggestion:
+            response_data["personality_suggestion_available"] = True
         
         return JsonResponse(response_data)
     return JsonResponse({"error": "Invalid request method."}, status=400)
@@ -324,6 +366,57 @@ def dismiss_personality_suggestion(request, session_id):
             # Clear the suggestion from session state
             if session.current_state and 'personality_update_suggestion' in session.current_state:
                 session.current_state.pop('personality_update_suggestion', None)
+                session.save()
+            
+            return JsonResponse({
+                "success": True,
+                "session_id": session.id
+            })
+        except ChatSession.DoesNotExist:
+            return JsonResponse({"error": "Session not found."}, status=404)
+    return JsonResponse({"error": "Invalid request method."}, status=400)
+
+def check_new_messages(request, session_id):
+    """Check if there are new proactive messages for a session"""
+    try:
+        session = ChatSession.objects.get(id=session_id)
+        
+        # Get proactive messages from session state
+        new_messages = []
+        if session.current_state and 'proactive_messages' in session.current_state:
+            proactive_message_ids = [msg['message_id'] for msg in session.current_state['proactive_messages']]
+            
+            # Get the actual message objects
+            for msg_data in session.current_state['proactive_messages']:
+                try:
+                    msg = ChatInformation.objects.get(id=msg_data['message_id'])
+                    new_messages.append({
+                        'id': msg.id,
+                        'message': msg.message,
+                        'timestamp': msg_data['timestamp'],
+                        'action': msg_data.get('action'),
+                        'reason': msg_data.get('reason')
+                    })
+                except ChatInformation.DoesNotExist:
+                    pass
+        
+        return JsonResponse({
+            "session_id": session.id,
+            "has_new_messages": len(new_messages) > 0,
+            "new_messages": new_messages
+        })
+    except ChatSession.DoesNotExist:
+        return JsonResponse({"error": "Session not found."}, status=404)
+
+def acknowledge_new_messages(request, session_id):
+    """Acknowledge that new proactive messages have been seen"""
+    if request.method == "POST":
+        try:
+            session = ChatSession.objects.get(id=session_id)
+            
+            # Clear proactive messages from session state
+            if session.current_state and 'proactive_messages' in session.current_state:
+                session.current_state.pop('proactive_messages', None)
                 session.save()
             
             return JsonResponse({

@@ -124,6 +124,17 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (data.summary_updated) {
                             loadSessions();
                         }
+                        
+                        // If personality was auto-updated, show notification
+                        if (data.personality_updated) {
+                            showPersonalityUpdateNotification();
+                            loadPersonalityPrompt(); // Refresh personality prompt in settings
+                        }
+                        
+                        // If personality suggestion is available, check and display it
+                        if (data.personality_suggestion_available) {
+                            checkPersonalitySuggestion(currentSessionId);
+                        }
                     } else {
                         appendMessage("Error", "Failed to get a response from the server.", "error-message");
                     }
@@ -364,6 +375,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Periodically check for session inactivity and proactive suggestions
     let inactivityCheckInterval = null;
     let personalityCheckInterval = null;
+    let newMessagesCheckInterval = null;
     
     function startInactivityMonitoring() {
         // Clear any existing interval
@@ -393,6 +405,20 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 300000); // 5 minutes in milliseconds
     }
     
+    function startNewMessagesMonitoring() {
+        // Clear any existing interval
+        if (newMessagesCheckInterval) {
+            clearInterval(newMessagesCheckInterval);
+        }
+        
+        // Check every 30 seconds for new proactive messages
+        newMessagesCheckInterval = setInterval(() => {
+            if (currentSessionId) {
+                checkForNewMessages(currentSessionId);
+            }
+        }, 30000); // 30 seconds in milliseconds
+    }
+    
     function checkSessionInactivity(sessionId) {
         fetch(`/api/sessions/${sessionId}/inactivity`)
             .then((response) => response.json())
@@ -407,6 +433,62 @@ document.addEventListener("DOMContentLoaded", () => {
             .catch((error) => {
                 console.error("Error checking inactivity:", error);
             });
+    }
+    
+    function checkForNewMessages(sessionId) {
+        fetch(`/api/sessions/${sessionId}/new-messages`)
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.has_new_messages && data.new_messages.length > 0) {
+                    // Display new proactive messages with red dot indicator
+                    data.new_messages.forEach((msg) => {
+                        appendMessage("AI (Proactive)", msg.message, "ai-message proactive-message new-message");
+                    });
+                    
+                    // Show red dot indicator on session
+                    showNewMessageIndicator();
+                    
+                    // Acknowledge the messages
+                    acknowledgeNewMessages(sessionId);
+                }
+            })
+            .catch((error) => {
+                console.error("Error checking new messages:", error);
+            });
+    }
+    
+    function acknowledgeNewMessages(sessionId) {
+        fetch(`/api/sessions/${sessionId}/acknowledge-messages`, {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrftoken,
+            }
+        })
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.success) {
+                    console.log("New messages acknowledged");
+                }
+            })
+            .catch((error) => {
+                console.error("Error acknowledging messages:", error);
+            });
+    }
+    
+    function showNewMessageIndicator() {
+        // Add a visual indicator (red dot) to the session title or chat area
+        const sessionTitle = document.getElementById('session-title');
+        if (sessionTitle && !sessionTitle.querySelector('.new-message-dot')) {
+            const dot = document.createElement('span');
+            dot.className = 'new-message-dot';
+            dot.style.cssText = 'display: inline-block; width: 8px; height: 8px; background-color: red; border-radius: 50%; margin-left: 8px;';
+            sessionTitle.appendChild(dot);
+            
+            // Remove the dot after 5 seconds
+            setTimeout(() => {
+                dot.remove();
+            }, 5000);
+        }
     }
     
     function checkPersonalitySuggestion(sessionId) {
@@ -511,7 +593,28 @@ document.addEventListener("DOMContentLoaded", () => {
         window.currentPersonalitySuggestion = null;
     }
     
+    function showPersonalityUpdateNotification() {
+        // Create a temporary notification banner
+        const notification = document.createElement('div');
+        notification.className = 'personality-update-notification';
+        notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background-color: #4CAF50; color: white; padding: 15px 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 1000;';
+        notification.innerHTML = `
+            <strong>✅ Personality Auto-Updated!</strong>
+            <p style="margin: 5px 0 0 0; font-size: 0.9em;">The AI personality has been automatically updated based on your conversation patterns.</p>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Remove after 5 seconds
+        setTimeout(() => {
+            notification.style.transition = 'opacity 0.5s';
+            notification.style.opacity = '0';
+            setTimeout(() => notification.remove(), 500);
+        }, 5000);
+    }
+    
     // Start monitoring when a session is active
     startInactivityMonitoring();
     startPersonalityMonitoring();
+    startNewMessagesMonitoring();
 });

@@ -644,5 +644,218 @@ class PersonalityUpdateTestCase(TestCase):
         from agent.tasks import check_all_sessions_inactivity_task, check_personality_updates_task
         self.assertIsNotNone(check_all_sessions_inactivity_task)
         self.assertIsNotNone(check_personality_updates_task)
+    
+    def test_personality_update_every_20_messages(self):
+        """Test that personality update is checked every 20 messages"""
+        from unittest.mock import patch, MagicMock
+        
+        # Use "default" agent config since that's what the view uses
+        agent_config = AgentConfiguration.objects.get_or_create(
+            name="default",
+            defaults={"parameters": {"model": "gpt-3.5-turbo", "personality_prompt": ""}}
+        )[0]
+        
+        session = ChatSession.objects.create(agent_configuration=agent_config)
+        
+        # Add messages to reach 18
+        for i in range(18):
+            msg = ChatInformation.objects.create(
+                message=f"Message {i}",
+                is_user=(i % 2 == 0),
+                is_agent=(i % 2 == 1)
+            )
+            session.chat_infos.add(msg)
+        
+        session.message_count = 18
+        session.save()
+        
+        # Mock the decide_personality_update to return a suggestion with high confidence
+        with patch('agent.views.decide_personality_update') as mock_decide:
+            mock_decide.return_value = {
+                'should_update': True,
+                'reason': 'Test reason',
+                'suggested_personality': 'Auto-applied personality',
+                'confidence': 0.85
+            }
+            
+            # Add 20th message via API (will add 2 messages: user + AI = 20 total)
+            response = self.client.post('/handle_user_input', {
+                'message': 'Test message at 20',
+                'session_id': session.id
+            })
+            
+            self.assertEqual(response.status_code, 200)
+            data = json.loads(response.content)
+            
+            # Verify personality was auto-updated due to high confidence
+            self.assertTrue(data.get('personality_updated'))
+            
+            # Verify the agent config was updated
+            agent_config.refresh_from_db()
+            self.assertEqual(agent_config.parameters['personality_prompt'], 'Auto-applied personality')
+    
+    def test_personality_suggestion_low_confidence(self):
+        """Test that personality update is suggested (not auto-applied) for low confidence"""
+        from unittest.mock import patch, MagicMock
+        
+        # Use "default" agent config since that's what the view uses
+        agent_config = AgentConfiguration.objects.get_or_create(
+            name="default",
+            defaults={"parameters": {"model": "gpt-3.5-turbo", "personality_prompt": ""}}
+        )[0]
+        
+        session = ChatSession.objects.create(agent_configuration=agent_config)
+        
+        # Add messages to reach 18
+        for i in range(18):
+            msg = ChatInformation.objects.create(
+                message=f"Message {i}",
+                is_user=(i % 2 == 0),
+                is_agent=(i % 2 == 1)
+            )
+            session.chat_infos.add(msg)
+        
+        session.message_count = 18
+        session.save()
+        
+        # Mock the decide_personality_update to return a suggestion with low confidence
+        with patch('agent.views.decide_personality_update') as mock_decide:
+            mock_decide.return_value = {
+                'should_update': True,
+                'reason': 'Test reason',
+                'suggested_personality': 'Suggested personality',
+                'confidence': 0.65  # Below threshold
+            }
+            
+            # Add 20th message via API
+            response = self.client.post('/handle_user_input', {
+                'message': 'Test message at 20',
+                'session_id': session.id
+            })
+            
+            self.assertEqual(response.status_code, 200)
+            data = json.loads(response.content)
+            
+            # Verify personality was not auto-updated
+            self.assertFalse(data.get('personality_updated', False))
+            # But suggestion is available
+            self.assertTrue(data.get('personality_suggestion_available'))
+            
+            # Verify suggestion is stored in session state
+            session.refresh_from_db()
+            self.assertIn('personality_update_suggestion', session.current_state)
+
+
+class ProactiveMessagingTestCase(TestCase):
+    """Test cases for proactive messaging feature"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.client = Client()
+        self.agent_config = AgentConfiguration.objects.create(
+            name="test",
+            parameters={"model": "gpt-3.5-turbo", "personality_prompt": ""},
+            timings={"inactivity_check_minutes": 5}
+        )
+        self.session = ChatSession.objects.create(
+            agent_configuration=self.agent_config
+        )
+    
+    def test_check_new_messages_endpoint_no_messages(self):
+        """Test check_new_messages endpoint with no new messages"""
+        response = self.client.get(f'/api/sessions/{self.session.id}/new-messages')
+        self.assertEqual(response.status_code, 200)
+        
+        data = json.loads(response.content)
+        self.assertFalse(data['has_new_messages'])
+        self.assertEqual(len(data['new_messages']), 0)
+    
+    def test_check_new_messages_endpoint_with_messages(self):
+        """Test check_new_messages endpoint with new messages"""
+        # Add a proactive message to session state
+        proactive_msg = ChatInformation.objects.create(
+            message="Proactive message",
+            is_user=False,
+            is_agent=True,
+            is_agent_growth=True
+        )
+        self.session.chat_infos.add(proactive_msg)
+        
+        self.session.current_state = {
+            'proactive_messages': [{
+                'message_id': proactive_msg.id,
+                'timestamp': timezone.now().isoformat(),
+                'action': 'continue',
+                'reason': 'Test reason'
+            }]
+        }
+        self.session.save()
+        
+        response = self.client.get(f'/api/sessions/{self.session.id}/new-messages')
+        self.assertEqual(response.status_code, 200)
+        
+        data = json.loads(response.content)
+        self.assertTrue(data['has_new_messages'])
+        self.assertEqual(len(data['new_messages']), 1)
+        self.assertEqual(data['new_messages'][0]['message'], "Proactive message")
+    
+    def test_acknowledge_messages_endpoint(self):
+        """Test acknowledge_new_messages endpoint"""
+        # Add proactive messages to session state
+        self.session.current_state = {
+            'proactive_messages': [{
+                'message_id': 1,
+                'timestamp': timezone.now().isoformat(),
+                'action': 'continue',
+                'reason': 'Test'
+            }]
+        }
+        self.session.save()
+        
+        response = self.client.post(f'/api/sessions/{self.session.id}/acknowledge-messages')
+        self.assertEqual(response.status_code, 200)
+        
+        data = json.loads(response.content)
+        self.assertTrue(data['success'])
+        
+        # Verify messages were cleared
+        self.session.refresh_from_db()
+        self.assertNotIn('proactive_messages', self.session.current_state)
+    
+    def test_inactivity_task_sends_message(self):
+        """Test that check_all_sessions_inactivity_task actually sends messages"""
+        from agent.tasks import check_all_sessions_inactivity_task
+        from unittest.mock import patch, MagicMock
+        
+        # Set session as inactive for 10 minutes
+        past_time = timezone.now() - timedelta(minutes=10)
+        self.session.last_activity_at = past_time
+        self.session.message_count = 10
+        self.session.save()
+        
+        # Update directly to avoid auto_now
+        ChatSession.objects.filter(id=self.session.id).update(last_activity_at=past_time)
+        self.session.refresh_from_db()
+        
+        # Mock the DecisionModule in agent.core
+        with patch('agent.core.DecisionModule') as mock_decision:
+            mock_decision.return_value = {
+                'action': 'continue',
+                'reason': 'Test reason',
+                'suggested_message': 'Would you like to continue?'
+            }
+            
+            # Run the task
+            check_all_sessions_inactivity_task()
+            
+            # Verify a proactive message was created
+            self.session.refresh_from_db()
+            proactive_messages = self.session.chat_infos.filter(is_agent_growth=True)
+            self.assertEqual(proactive_messages.count(), 1)
+            self.assertEqual(proactive_messages.first().message, 'Would you like to continue?')
+            
+            # Verify session state was updated
+            self.assertIn('proactive_messages', self.session.current_state)
+            self.assertEqual(len(self.session.current_state['proactive_messages']), 1)
 
 

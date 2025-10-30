@@ -31,6 +31,8 @@ urlpatterns = [
     path('api/sessions/<int:session_id>/personality-suggestion', views.check_personality_update_suggestion, name='check_personality_update_suggestion'),
     path('api/sessions/<int:session_id>/personality-update', views.apply_personality_update, name='apply_personality_update'),
     path('api/sessions/<int:session_id>/personality-dismiss', views.dismiss_personality_suggestion, name='dismiss_personality_suggestion'),
+    path('api/sessions/<int:session_id>/new-messages', views.check_new_messages, name='check_new_messages'),
+    path('api/sessions/<int:session_id>/acknowledge-messages', views.acknowledge_new_messages, name='acknowledge_new_messages'),
     path('api/personality/update', views.update_personality_prompt, name='update_personality_prompt'),
     path('api/personality/get', views.get_personality_prompt, name='get_personality_prompt'),
 ]
