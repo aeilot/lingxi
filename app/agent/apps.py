@@ -10,17 +10,14 @@ class AgentConfig(AppConfig):
     
     def ready(self):
         """
-        Called when the app is ready. Start the background scheduler here.
+        Called when the app is ready.
+        Import tasks to ensure they are registered with Celery.
         """
-        # Only start scheduler in the main process, not in management commands
-        import sys
-        
-        # Avoid starting scheduler during migrations, tests, or other management commands
-        if 'runserver' in sys.argv or 'gunicorn' in sys.argv[0]:
-            from .scheduler import start_scheduler
-            try:
-                start_scheduler()
-                logger.info("Scheduler started in ready()")
-            except Exception as e:
-                logger.error(f"Failed to start scheduler: {str(e)}")
+        # Import tasks so they are registered with Celery
+        try:
+            from . import tasks
+            logger.info("Celery tasks registered")
+        except Exception as e:
+            logger.error(f"Failed to register Celery tasks: {str(e)}")
+
 
