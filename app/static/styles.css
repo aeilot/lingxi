@@ -88,6 +88,15 @@ body {
     border-left: 3px solid #007aff;
 }
 
+.session-item.unread {
+    border-left: 3px solid #ff3b30;
+}
+
+.session-item.active.unread {
+    background: #e8f0fe;
+    border-left: 3px solid #ff3b30;
+}
+
 .session-time {
     font-size: 11px;
     color: #86868b;
@@ -209,6 +218,30 @@ body {
     color: #856404;
     border: 1px solid #ffeaa7;
     border-radius: 12px;
+}
+
+/* Unread messages divider */
+.unread-divider {
+    display: flex;
+    align-items: center;
+    margin: 16px 0;
+    text-align: center;
+}
+
+.unread-divider::before,
+.unread-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 2px solid #ff3b30;
+}
+
+.unread-divider-text {
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #ff3b30;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .chat-input {
