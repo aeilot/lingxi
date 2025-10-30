@@ -7,6 +7,7 @@ class ChatInformation(models.Model):
     is_agent_growth = models.BooleanField(default=False, verbose_name="Is Agent Growth", help_text="Indicates if the message was sent by the agent growth system.")
     is_user = models.BooleanField(default=True, verbose_name="Is User", help_text="Indicates if the message was sent by the user.")
     is_agent = models.BooleanField(default=False, verbose_name="Is Agent", help_text="Indicates if the message was sent by the agent.")
+    is_read = models.BooleanField(default=False, verbose_name="Is Read", help_text="Indicates if the message has been read by the user (已读回执).")
     metadata = models.JSONField(blank=True, null=True, verbose_name="Metadata", help_text="Additional metadata related to the chat.")
     critical = models.BooleanField(default=False, verbose_name="Critical", help_text="Indicates if the chat is marked as critical.")
     critical_type = models.CharField(max_length=100, blank=True, null=True, verbose_name="Critical Type", help_text="The type, if applicable.")

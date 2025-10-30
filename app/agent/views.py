@@ -58,6 +58,10 @@ def handle_user_input(request):
         else:
             session = ChatSession.objects.create(agent_configuration=agent_config)
         
+        # Mark all previous AI messages as read when user sends a message
+        # (User is obviously viewing the conversation)
+        session.chat_infos.filter(is_agent=True, is_read=False).update(is_read=True)
+        
         # Save user message
         user_chat = ChatInformation.objects.create(
             message=user_message,
@@ -199,6 +203,9 @@ def get_session_history(request, session_id):
     try:
         session = ChatSession.objects.get(id=session_id)
         messages = session.chat_infos.all().order_by('chat_date')
+        
+        # Mark all AI messages as read when user loads session history
+        session.chat_infos.filter(is_agent=True, is_read=False).update(is_read=True)
         
         history = []
         for msg in messages:
@@ -425,6 +432,7 @@ def check_new_messages(request, session_id):
                     new_messages.append({
                         'id': msg.id,
                         'message': msg.message,
+                        'is_read': msg.is_read,
                         'timestamp': msg_data['timestamp'],
                         'action': msg_data.get('action'),
                         'reason': msg_data.get('reason')
@@ -445,6 +453,9 @@ def acknowledge_new_messages(request, session_id):
     if request.method == "POST":
         try:
             session = ChatSession.objects.get(id=session_id)
+            
+            # Mark all AI messages in this session as read
+            session.chat_infos.filter(is_agent=True, is_read=False).update(is_read=True)
             
             # Clear proactive messages from session state
             if session.current_state and 'proactive_messages' in session.current_state:
