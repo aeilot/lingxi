@@ -150,4 +150,146 @@ def should_update_agent_config(old_config, new_config):
     return old_config.parameters != new_config.parameters
 
 
+def DecisionModule(session, agent_config, api_key=None, base_url=None):
+    """
+    Make an AI-based decision on whether to proactively continue or start a new topic.
+    
+    This function analyzes the chat summary and user settings to determine the best action
+    when the user has stopped chatting.
+    
+    Args:
+        session: ChatSession object
+        agent_config: AgentConfiguration object
+        api_key: OpenAI API key (optional)
+        base_url: OpenAI base URL (optional)
+    
+    Returns:
+        dict: Decision result with keys:
+            - action: 'continue', 'new_topic', or 'wait'
+            - reason: explanation for the decision
+            - suggested_message: optional message to send (if action is 'continue' or 'new_topic')
+    """
+    # Get session summary and recent activity
+    summary = session.summary or "No summary available"
+    message_count = session.message_count
+    
+    # Get timing configuration from agent config
+    timings = agent_config.timings or {}
+    inactivity_threshold = timings.get('inactivity_check_minutes', 5)
+    
+    # Calculate inactivity duration
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    if not session.last_activity_at:
+        return {
+            'action': 'wait',
+            'reason': 'No activity recorded yet',
+            'suggested_message': None
+        }
+    
+    time_since_activity = timezone.now() - session.last_activity_at
+    minutes_inactive = time_since_activity.total_seconds() / 60
+    
+    # If not enough time has passed, wait
+    if minutes_inactive < inactivity_threshold:
+        return {
+            'action': 'wait',
+            'reason': f'Only {minutes_inactive:.1f} minutes inactive, threshold is {inactivity_threshold}',
+            'suggested_message': None
+        }
+    
+    # If no API key provided, use simple rule-based decision
+    if not api_key:
+        # Simple fallback: if conversation has fewer than 5 messages, suggest waiting
+        if message_count < 5:
+            return {
+                'action': 'wait',
+                'reason': 'Conversation too short to make a decision (no API key)',
+                'suggested_message': None
+            }
+        else:
+            return {
+                'action': 'continue',
+                'reason': 'Sufficient conversation history (no API key)',
+                'suggested_message': 'Would you like to continue our discussion, or is there anything else I can help you with?'
+            }
+    
+    try:
+        # Configure OpenAI client
+        client_kwargs = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        
+        client = openai.OpenAI(**client_kwargs)
+        
+        # Get recent chat history
+        recent_messages = session.chat_infos.order_by('-chat_date')[:10]
+        conversation_text = ""
+        for chat in reversed(recent_messages):
+            role = "User" if chat.is_user else "AI"
+            conversation_text += f"{role}: {chat.message}\n"
+        
+        # Get user preferences from agent config
+        user_preferences = agent_config.parameters.get('proactive_behavior', 'balanced')
+        
+        # Create decision prompt
+        prompt = f"""You are analyzing a chat conversation to decide whether the AI should proactively continue the conversation.
+
+Current summary: {summary}
+Message count: {message_count}
+Minutes inactive: {minutes_inactive:.1f}
+User preference for proactivity: {user_preferences}
+
+Recent conversation:
+{conversation_text}
+
+Based on this information, decide whether the AI should:
+1. 'continue' - proactively continue the current topic with a relevant follow-up
+2. 'new_topic' - suggest starting a new related topic
+3. 'wait' - wait for the user to respond
+
+Consider:
+- Is the conversation at a natural stopping point?
+- Are there unanswered questions or incomplete thoughts?
+- Would a follow-up add value or feel pushy?
+- What is the user's preference level for proactive behavior?
+
+Respond ONLY with a JSON object in this exact format:
+{{"action": "continue|new_topic|wait", "reason": "brief explanation", "suggested_message": "message to send or null"}}"""
+
+        # Get model from agent configuration
+        model = agent_config.parameters.get("model", "gpt-3.5-turbo")
+        
+        # Call OpenAI API for decision making
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that makes smart decisions about proactive conversation engagement. Always respond with valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7
+        )
+        
+        result_text = response.choices[0].message.content.strip()
+        
+        # Parse JSON response
+        import json
+        result = json.loads(result_text)
+        
+        # Validate response structure
+        if 'action' not in result or result['action'] not in ['continue', 'new_topic', 'wait']:
+            raise ValueError("Invalid action in response")
+        
+        return result
+    
+    except Exception as e:
+        # Fallback to simple decision on error
+        return {
+            'action': 'wait',
+            'reason': f'Error making AI decision: {str(e)}',
+            'suggested_message': None
+        }
+
+
 # etc.

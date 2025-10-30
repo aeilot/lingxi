@@ -26,6 +26,8 @@ urlpatterns = [
     path('api/sessions/list', views.list_sessions, name='list_sessions'),
     path('api/sessions/<int:session_id>/history', views.get_session_history, name='get_session_history'),
     path('api/sessions/<int:session_id>/delete', views.delete_session, name='delete_session'),
+    path('api/sessions/<int:session_id>/inactivity', views.check_session_inactivity, name='check_session_inactivity'),
+    path('api/sessions/<int:session_id>/summary', views.get_session_summary, name='get_session_summary'),
     path('api/personality/update', views.update_personality_prompt, name='update_personality_prompt'),
     path('api/personality/get', views.get_personality_prompt, name='get_personality_prompt'),
 ]
