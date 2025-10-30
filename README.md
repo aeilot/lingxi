@@ -58,13 +58,24 @@ The application uses environment variables for OpenAI API configuration. Create 
 - `OPENAI_API_KEY`: Your OpenAI API key (required for AI responses)
 - `OPENAI_BASE_URL`: The OpenAI API base URL (default: https://api.openai.com/v1)
 - `OPENAI_MODEL`: The model to use (default: gpt-3.5-turbo)
+- `SCHEDULER_CHECK_INTERVAL_MINUTES`: Interval in minutes for checking session inactivity (default: 5)
 
 Example:
 ```
 OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxx
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-3.5-turbo
+SCHEDULER_CHECK_INTERVAL_MINUTES=5
 ```
+
+### Session Inactivity Scheduler
+
+The application includes a background scheduler that periodically checks for inactive chat sessions. The scheduler:
+
+- Runs automatically when the development server starts
+- Checks all sessions at the configured interval (default: 5 minutes)
+- Uses the DecisionModule to determine if proactive messages should be sent to inactive users
+- Can be configured via the `SCHEDULER_CHECK_INTERVAL_MINUTES` environment variable
 
 ### Agent Personality
 
