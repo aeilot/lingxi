@@ -24,7 +24,7 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
         # Add system message with personality prompt if configured
         personality_prompt = agent_config.parameters.get("personality_prompt", "")
         if personality_prompt:
-            messages.append({"role": "system", "content": personality_prompt + "\n Reply with the specified personality in mind. Reply with plain Markdown and don't wrap it in a code block. Reply in the sender's language."})
+            messages.append({"role": "system", "content": personality_prompt + "\n Reply with the specified personality in mind. Reply with plain text and don't wrap it in a code block. Reply in the sender's language."})
 
         chat_history = session.chat_infos.order_by('-chat_date')[:20]
         # Reverse to get chronological order
