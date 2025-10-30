@@ -1,5 +1,9 @@
 // JavaScript for handling chat interactions
 
+// Constants
+const MESSAGE_DISPLAY_DELAY_MS = 300;
+const PROACTIVE_MESSAGE_ACK_DELAY_MS = 2000;
+
 /**
  * Get CSRF token from cookies
  * @param {string} name - The name of the cookie to retrieve
@@ -111,8 +115,22 @@ document.addEventListener("DOMContentLoaded", () => {
                     // Remove loading indicator
                     removeLoadingIndicator(loadingMessage);
                     
-                    if (data.response) {
-                        appendMessage("AI", data.response, "ai-message");
+                    if (data.response || data.messages) {
+                        // Handle split messages (new format) or single message (legacy format)
+                        if (data.messages && Array.isArray(data.messages)) {
+                            // Multiple messages - display each one with a slight delay for effect
+                            data.messages.forEach((msgObj, index) => {
+                                setTimeout(() => {
+                                    // Ensure msgObj has the expected structure
+                                    const message = msgObj.message || msgObj;
+                                    appendMessage("AI", message, "ai-message");
+                                }, index * MESSAGE_DISPLAY_DELAY_MS);
+                            });
+                        } else if (data.response) {
+                            // Single message (legacy format)
+                            appendMessage("AI", data.response, "ai-message");
+                        }
+                        
                         // Update current session ID if it was created
                         if (data.session_id && !currentSessionId) {
                             currentSessionId = data.session_id;
@@ -153,6 +171,7 @@ document.addEventListener("DOMContentLoaded", () => {
         messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
         chatMessages.appendChild(messageElement);
         chatMessages.scrollTop = chatMessages.scrollHeight;
+        return messageElement; // Return the element for further manipulation
     }
 
     function showLoadingIndicator() {
@@ -440,21 +459,47 @@ document.addEventListener("DOMContentLoaded", () => {
             .then((response) => response.json())
             .then((data) => {
                 if (data.has_new_messages && data.new_messages.length > 0) {
-                    // Display new proactive messages with red dot indicator
-                    data.new_messages.forEach((msg) => {
-                        appendMessage("AI (Proactive)", msg.message, "ai-message proactive-message new-message");
+                    // Display new proactive messages with read indicator and special styling
+                    data.new_messages.forEach((msg, index) => {
+                        setTimeout(() => {
+                            const messageElement = appendMessage("AI (Proactive)", msg.message, "ai-message proactive-message");
+                            // Add read indicator to the message
+                            addReadIndicatorToMessage(messageElement);
+                        }, index * 400); // Stagger the display
                     });
                     
-                    // Show red dot indicator on session
+                    // Show read indicator on session title
                     showNewMessageIndicator();
                     
-                    // Acknowledge the messages
-                    acknowledgeNewMessages(sessionId);
+                    // Acknowledge the messages after a delay
+                    setTimeout(() => {
+                        acknowledgeNewMessages(sessionId);
+                    }, PROACTIVE_MESSAGE_ACK_DELAY_MS);
                 }
             })
             .catch((error) => {
                 console.error("Error checking new messages:", error);
             });
+    }
+    
+    function addReadIndicatorToMessage(messageElement) {
+        if (!messageElement) return;
+        
+        // Create read indicator (checkmark icon)
+        const readIndicator = document.createElement('span');
+        readIndicator.className = 'message-read-indicator unread';
+        readIndicator.innerHTML = '✓✓'; // Double checkmark for read receipt
+        readIndicator.title = 'Unread';
+        
+        // Append to the end of the message
+        messageElement.appendChild(readIndicator);
+        
+        // Mark as read after 3 seconds (simulate reading time)
+        setTimeout(() => {
+            readIndicator.classList.remove('unread');
+            readIndicator.classList.add('read');
+            readIndicator.title = 'Read';
+        }, 3000);
     }
     
     function acknowledgeNewMessages(sessionId) {
@@ -476,18 +521,27 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     
     function showNewMessageIndicator() {
-        // Add a visual indicator (red dot) to the session title or chat area
+        // Add a visual indicator (badge) to the session title
         const sessionTitle = document.getElementById('session-title');
-        if (sessionTitle && !sessionTitle.querySelector('.new-message-dot')) {
-            const dot = document.createElement('span');
-            dot.className = 'new-message-dot';
-            dot.style.cssText = 'display: inline-block; width: 8px; height: 8px; background-color: red; border-radius: 50%; margin-left: 8px;';
-            sessionTitle.appendChild(dot);
+        if (sessionTitle && !sessionTitle.querySelector('.new-message-badge')) {
+            const badge = document.createElement('span');
+            badge.className = 'new-message-badge pulse';
+            badge.textContent = '✓✓';
+            badge.title = 'New proactive message(s) - Unread';
+            sessionTitle.appendChild(badge);
             
-            // Remove the dot after 5 seconds
+            // Mark as read and remove the badge after 10 seconds
             setTimeout(() => {
-                dot.remove();
-            }, 5000);
+                badge.classList.remove('pulse');
+                badge.classList.add('read');
+                badge.title = 'Messages read';
+                
+                // Remove completely after fade
+                setTimeout(() => {
+                    badge.classList.add('fade-out');
+                    setTimeout(() => badge.remove(), 500);
+                }, 2000);
+            }, 10000);
         }
     }
     
@@ -594,22 +648,28 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     
     function showPersonalityUpdateNotification() {
-        // Create a temporary notification banner
+        // Create a modern notification toast
         const notification = document.createElement('div');
         notification.className = 'personality-update-notification';
-        notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background-color: #4CAF50; color: white; padding: 15px 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 1000;';
         notification.innerHTML = `
-            <strong>✅ Personality Auto-Updated!</strong>
-            <p style="margin: 5px 0 0 0; font-size: 0.9em;">The AI personality has been automatically updated based on your conversation patterns.</p>
+            <div class="notification-icon">✨</div>
+            <div class="notification-content">
+                <div class="notification-title">Personality Updated</div>
+                <div class="notification-message">AI personality automatically adapted to your conversation style</div>
+            </div>
+            <button class="notification-close" onclick="this.parentElement.remove()">×</button>
         `;
         
         document.body.appendChild(notification);
         
-        // Remove after 5 seconds
+        // Trigger animation
+        setTimeout(() => notification.classList.add('show'), 10);
+        
+        // Auto-remove after 5 seconds with fade out animation
         setTimeout(() => {
-            notification.style.transition = 'opacity 0.5s';
-            notification.style.opacity = '0';
-            setTimeout(() => notification.remove(), 500);
+            notification.classList.remove('show');
+            notification.classList.add('hide');
+            setTimeout(() => notification.remove(), 300);
         }, 5000);
     }
     
