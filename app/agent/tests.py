@@ -406,3 +406,65 @@ class DecisionModuleTestCase(TestCase):
             self.assertTrue(data['summary_updated'])
             self.assertIn('summary', data)
             self.assertEqual(data['summary'], "Generated summary")
+
+
+class SchedulerTestCase(TestCase):
+    """Test cases for the scheduler module"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.agent_config = AgentConfiguration.objects.create(
+            name="test",
+            parameters={"model": "gpt-3.5-turbo", "personality_prompt": ""}
+        )
+        self.session = ChatSession.objects.create(
+            agent_configuration=self.agent_config
+        )
+    
+    def test_scheduler_module_imports(self):
+        """Test that scheduler module can be imported"""
+        from agent.scheduler import start_scheduler, stop_scheduler, check_all_sessions_inactivity
+        self.assertIsNotNone(start_scheduler)
+        self.assertIsNotNone(stop_scheduler)
+        self.assertIsNotNone(check_all_sessions_inactivity)
+    
+    @patch('agent.core.DecisionModule')
+    def test_check_all_sessions_inactivity(self, mock_decision):
+        """Test that check_all_sessions_inactivity processes sessions correctly"""
+        from agent.scheduler import check_all_sessions_inactivity
+        
+        # Set up a session with activity 10 minutes ago
+        past_time = timezone.now() - timedelta(minutes=10)
+        self.session.last_activity_at = past_time
+        self.session.save()
+        
+        # Mock the DecisionModule to return a decision
+        mock_decision.return_value = {
+            'action': 'send_message',
+            'reason': 'User has been inactive',
+            'suggested_message': 'Are you still there?'
+        }
+        
+        # Run the check
+        check_all_sessions_inactivity()
+        
+        # Verify DecisionModule was called for the inactive session
+        self.assertTrue(mock_decision.called)
+    
+    def test_scheduler_start_stop(self):
+        """Test that scheduler can be started and stopped"""
+        from agent.scheduler import start_scheduler, stop_scheduler, scheduler
+        
+        # Start the scheduler
+        start_scheduler()
+        
+        # Verify scheduler is running
+        from agent import scheduler as scheduler_module
+        self.assertIsNotNone(scheduler_module.scheduler)
+        
+        # Stop the scheduler
+        stop_scheduler()
+        
+        # Verify scheduler is stopped
+        self.assertIsNone(scheduler_module.scheduler)
+
