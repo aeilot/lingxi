@@ -363,6 +363,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Periodically check for session inactivity and proactive suggestions
     let inactivityCheckInterval = null;
+    let personalityCheckInterval = null;
     
     function startInactivityMonitoring() {
         // Clear any existing interval
@@ -376,6 +377,20 @@ document.addEventListener("DOMContentLoaded", () => {
                 checkSessionInactivity(currentSessionId);
             }
         }, 120000); // 2 minutes in milliseconds
+    }
+    
+    function startPersonalityMonitoring() {
+        // Clear any existing interval
+        if (personalityCheckInterval) {
+            clearInterval(personalityCheckInterval);
+        }
+        
+        // Check every 5 minutes for personality update suggestions
+        personalityCheckInterval = setInterval(() => {
+            if (currentSessionId) {
+                checkPersonalitySuggestion(currentSessionId);
+            }
+        }, 300000); // 5 minutes in milliseconds
     }
     
     function checkSessionInactivity(sessionId) {
@@ -394,6 +409,109 @@ document.addEventListener("DOMContentLoaded", () => {
             });
     }
     
+    function checkPersonalitySuggestion(sessionId) {
+        fetch(`/api/sessions/${sessionId}/personality-suggestion`)
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.has_suggestion && data.suggestion && data.suggestion.should_update) {
+                    displayPersonalitySuggestion(data.suggestion);
+                }
+            })
+            .catch((error) => {
+                console.error("Error checking personality suggestion:", error);
+            });
+    }
+    
+    function displayPersonalitySuggestion(suggestion) {
+        // Check if a suggestion banner already exists
+        if (document.getElementById('personality-suggestion-banner')) {
+            return; // Don't show duplicate banners
+        }
+        
+        // Create a banner to display the suggestion
+        const banner = document.createElement('div');
+        banner.id = 'personality-suggestion-banner';
+        banner.className = 'personality-suggestion-banner';
+        banner.innerHTML = `
+            <div class="suggestion-content">
+                <div class="suggestion-header">
+                    <strong>💡 Personality Update Suggestion</strong>
+                    <span class="confidence-badge">Confidence: ${(suggestion.confidence * 100).toFixed(0)}%</span>
+                </div>
+                <div class="suggestion-reason">${suggestion.reason}</div>
+                <div class="suggestion-personality">
+                    <strong>Suggested personality:</strong> "${suggestion.suggested_personality}"
+                </div>
+                <div class="suggestion-actions">
+                    <button class="btn-apply" onclick="applyPersonalitySuggestion()">Apply</button>
+                    <button class="btn-dismiss" onclick="dismissPersonalitySuggestion()">Dismiss</button>
+                </div>
+            </div>
+        `;
+        
+        // Insert the banner at the top of the chat container
+        const chatContainer = document.querySelector('.chat-container');
+        chatContainer.insertBefore(banner, chatContainer.firstChild);
+        
+        // Store the suggestion for later use
+        window.currentPersonalitySuggestion = suggestion;
+    }
+    
+    window.applyPersonalitySuggestion = function() {
+        if (!currentSessionId) return;
+        
+        fetch(`/api/sessions/${currentSessionId}/personality-update`, {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrftoken,
+            }
+        })
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.success) {
+                    alert("Personality updated successfully!");
+                    removeSuggestionBanner();
+                    // Update the personality prompt input if settings modal is open
+                    loadPersonalityPrompt();
+                } else {
+                    alert("Failed to apply personality update.");
+                }
+            })
+            .catch((error) => {
+                console.error("Error applying personality update:", error);
+                alert("An error occurred while applying the update.");
+            });
+    };
+    
+    window.dismissPersonalitySuggestion = function() {
+        if (!currentSessionId) return;
+        
+        fetch(`/api/sessions/${currentSessionId}/personality-dismiss`, {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrftoken,
+            }
+        })
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.success) {
+                    removeSuggestionBanner();
+                }
+            })
+            .catch((error) => {
+                console.error("Error dismissing personality suggestion:", error);
+            });
+    };
+    
+    function removeSuggestionBanner() {
+        const banner = document.getElementById('personality-suggestion-banner');
+        if (banner) {
+            banner.remove();
+        }
+        window.currentPersonalitySuggestion = null;
+    }
+    
     // Start monitoring when a session is active
     startInactivityMonitoring();
+    startPersonalityMonitoring();
 });

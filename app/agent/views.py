@@ -260,3 +260,78 @@ def get_session_summary(request, session_id):
     except ChatSession.DoesNotExist:
         return JsonResponse({"error": "Session not found."}, status=404)
 
+def check_personality_update_suggestion(request, session_id):
+    """Check if there's a personality update suggestion for a session"""
+    try:
+        session = ChatSession.objects.get(id=session_id)
+        
+        # Get the personality update suggestion from session state
+        suggestion = None
+        if session.current_state and 'personality_update_suggestion' in session.current_state:
+            suggestion = session.current_state['personality_update_suggestion']
+        
+        return JsonResponse({
+            "session_id": session.id,
+            "has_suggestion": suggestion is not None and suggestion.get('should_update', False),
+            "suggestion": suggestion
+        })
+    except ChatSession.DoesNotExist:
+        return JsonResponse({"error": "Session not found."}, status=404)
+
+def apply_personality_update(request, session_id):
+    """Apply a suggested personality update to the agent configuration"""
+    if request.method == "POST":
+        try:
+            session = ChatSession.objects.get(id=session_id)
+            
+            # Get the suggested personality from request or session state
+            suggested_personality = request.POST.get("suggested_personality", "").strip()
+            
+            if not suggested_personality:
+                # Try to get it from session state
+                if session.current_state and 'personality_update_suggestion' in session.current_state:
+                    suggestion = session.current_state['personality_update_suggestion']
+                    suggested_personality = suggestion.get('suggested_personality', '')
+            
+            if not suggested_personality:
+                return JsonResponse({"error": "No personality suggestion provided."}, status=400)
+            
+            # Update the agent configuration
+            agent_config = session.agent_configuration
+            agent_config.parameters["personality_prompt"] = suggested_personality
+            agent_config.save()
+            
+            # Clear the suggestion from session state
+            if session.current_state:
+                session.current_state.pop('personality_update_suggestion', None)
+                session.save()
+            
+            return JsonResponse({
+                "success": True,
+                "personality_prompt": suggested_personality,
+                "session_id": session.id
+            })
+        except ChatSession.DoesNotExist:
+            return JsonResponse({"error": "Session not found."}, status=404)
+    return JsonResponse({"error": "Invalid request method."}, status=400)
+
+def dismiss_personality_suggestion(request, session_id):
+    """Dismiss a personality update suggestion"""
+    if request.method == "POST":
+        try:
+            session = ChatSession.objects.get(id=session_id)
+            
+            # Clear the suggestion from session state
+            if session.current_state and 'personality_update_suggestion' in session.current_state:
+                session.current_state.pop('personality_update_suggestion', None)
+                session.save()
+            
+            return JsonResponse({
+                "success": True,
+                "session_id": session.id
+            })
+        except ChatSession.DoesNotExist:
+            return JsonResponse({"error": "Session not found."}, status=404)
+    return JsonResponse({"error": "Invalid request method."}, status=400)
+
+

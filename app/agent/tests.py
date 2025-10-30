@@ -468,3 +468,181 @@ class SchedulerTestCase(TestCase):
         # Verify scheduler is stopped
         self.assertIsNone(scheduler_module.scheduler)
 
+
+class PersonalityUpdateTestCase(TestCase):
+    """Test cases for the personality update feature"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.client = Client()
+        self.agent_config = AgentConfiguration.objects.create(
+            name="test",
+            parameters={"model": "gpt-3.5-turbo", "personality_prompt": ""}
+        )
+        self.session = ChatSession.objects.create(
+            agent_configuration=self.agent_config
+        )
+    
+    def test_decide_personality_update_insufficient_messages(self):
+        """Test that personality update is not suggested with insufficient messages"""
+        from agent.core import decide_personality_update
+        
+        self.session.message_count = 10
+        self.session.save()
+        
+        decision = decide_personality_update(self.session, self.agent_config)
+        
+        self.assertFalse(decision['should_update'])
+        self.assertIn('not enough', decision['reason'].lower())
+        self.assertEqual(decision['confidence'], 0.0)
+    
+    def test_decide_personality_update_sufficient_messages_no_api(self):
+        """Test personality update decision with sufficient messages but no API"""
+        from agent.core import decide_personality_update
+        
+        self.session.message_count = 50
+        self.session.save()
+        
+        decision = decide_personality_update(self.session, self.agent_config, api_key=None)
+        
+        # Should suggest update at 50 messages with empty personality
+        self.assertTrue(decision['should_update'])
+        self.assertIsNotNone(decision['suggested_personality'])
+    
+    def test_decide_personality_update_with_mocked_api(self):
+        """Test personality update decision with mocked OpenAI API"""
+        from agent.core import decide_personality_update
+        from unittest.mock import patch, MagicMock
+        
+        self.session.message_count = 30
+        self.session.summary = "Discussion about Python programming"
+        self.session.save()
+        
+        # Add some chat messages
+        for i in range(15):
+            user_msg = ChatInformation.objects.create(
+                message=f"User question about Python {i}",
+                is_user=True,
+                is_agent=False
+            )
+            self.session.chat_infos.add(user_msg)
+            
+            ai_msg = ChatInformation.objects.create(
+                message=f"AI response about Python {i}",
+                is_user=False,
+                is_agent=True
+            )
+            self.session.chat_infos.add(ai_msg)
+        
+        # Mock the OpenAI API call
+        with patch('agent.core.openai.OpenAI') as mock_openai:
+            mock_client = MagicMock()
+            mock_openai.return_value = mock_client
+            
+            # Mock the API response
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].message.content = '''{"should_update": true, "reason": "User prefers detailed technical explanations", "suggested_personality": "You are a knowledgeable Python programming assistant who provides detailed technical explanations with code examples.", "confidence": 0.85}'''
+            mock_client.chat.completions.create.return_value = mock_response
+            
+            decision = decide_personality_update(
+                self.session,
+                self.agent_config,
+                api_key="test-key",
+                base_url="https://api.test.com"
+            )
+            
+            self.assertTrue(decision['should_update'])
+            self.assertIn('Python', decision['suggested_personality'])
+            self.assertEqual(decision['confidence'], 0.85)
+    
+    def test_check_personality_suggestion_endpoint_no_suggestion(self):
+        """Test the check_personality_update_suggestion endpoint with no suggestion"""
+        response = self.client.get(f'/api/sessions/{self.session.id}/personality-suggestion')
+        self.assertEqual(response.status_code, 200)
+        
+        data = json.loads(response.content)
+        self.assertFalse(data['has_suggestion'])
+        self.assertIsNone(data['suggestion'])
+    
+    def test_check_personality_suggestion_endpoint_with_suggestion(self):
+        """Test the check_personality_update_suggestion endpoint with a suggestion"""
+        # Add a suggestion to the session state
+        self.session.current_state = {
+            'personality_update_suggestion': {
+                'should_update': True,
+                'reason': 'Test reason',
+                'suggested_personality': 'Test personality',
+                'confidence': 0.8
+            }
+        }
+        self.session.save()
+        
+        response = self.client.get(f'/api/sessions/{self.session.id}/personality-suggestion')
+        self.assertEqual(response.status_code, 200)
+        
+        data = json.loads(response.content)
+        self.assertTrue(data['has_suggestion'])
+        self.assertIsNotNone(data['suggestion'])
+        self.assertEqual(data['suggestion']['suggested_personality'], 'Test personality')
+    
+    def test_apply_personality_update_endpoint(self):
+        """Test applying a personality update"""
+        # Add a suggestion to the session state
+        self.session.current_state = {
+            'personality_update_suggestion': {
+                'should_update': True,
+                'reason': 'Test reason',
+                'suggested_personality': 'New test personality',
+                'confidence': 0.8
+            }
+        }
+        self.session.save()
+        
+        # Apply the update
+        response = self.client.post(f'/api/sessions/{self.session.id}/personality-update')
+        self.assertEqual(response.status_code, 200)
+        
+        data = json.loads(response.content)
+        self.assertTrue(data['success'])
+        self.assertEqual(data['personality_prompt'], 'New test personality')
+        
+        # Verify the agent config was updated
+        self.agent_config.refresh_from_db()
+        self.assertEqual(self.agent_config.parameters['personality_prompt'], 'New test personality')
+        
+        # Verify the suggestion was cleared
+        self.session.refresh_from_db()
+        self.assertNotIn('personality_update_suggestion', self.session.current_state)
+    
+    def test_dismiss_personality_suggestion_endpoint(self):
+        """Test dismissing a personality suggestion"""
+        # Add a suggestion to the session state
+        self.session.current_state = {
+            'personality_update_suggestion': {
+                'should_update': True,
+                'reason': 'Test reason',
+                'suggested_personality': 'Test personality',
+                'confidence': 0.8
+            }
+        }
+        self.session.save()
+        
+        # Dismiss the suggestion
+        response = self.client.post(f'/api/sessions/{self.session.id}/personality-dismiss')
+        self.assertEqual(response.status_code, 200)
+        
+        data = json.loads(response.content)
+        self.assertTrue(data['success'])
+        
+        # Verify the suggestion was cleared
+        self.session.refresh_from_db()
+        self.assertNotIn('personality_update_suggestion', self.session.current_state)
+    
+    def test_celery_tasks_can_be_imported(self):
+        """Test that Celery tasks can be imported"""
+        from agent.tasks import check_all_sessions_inactivity_task, check_personality_updates_task
+        self.assertIsNotNone(check_all_sessions_inactivity_task)
+        self.assertIsNotNone(check_personality_updates_task)
+
+

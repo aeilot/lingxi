@@ -28,6 +28,9 @@ urlpatterns = [
     path('api/sessions/<int:session_id>/delete', views.delete_session, name='delete_session'),
     path('api/sessions/<int:session_id>/inactivity', views.check_session_inactivity, name='check_session_inactivity'),
     path('api/sessions/<int:session_id>/summary', views.get_session_summary, name='get_session_summary'),
+    path('api/sessions/<int:session_id>/personality-suggestion', views.check_personality_update_suggestion, name='check_personality_update_suggestion'),
+    path('api/sessions/<int:session_id>/personality-update', views.apply_personality_update, name='apply_personality_update'),
+    path('api/sessions/<int:session_id>/personality-dismiss', views.dismiss_personality_suggestion, name='dismiss_personality_suggestion'),
     path('api/personality/update', views.update_personality_prompt, name='update_personality_prompt'),
     path('api/personality/get', views.get_personality_prompt, name='get_personality_prompt'),
 ]

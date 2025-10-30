@@ -144,6 +144,150 @@ def should_update_agent_config(old_config, new_config):
     return old_config.parameters != new_config.parameters
 
 
+def decide_personality_update(session, agent_config, api_key=None, base_url=None):
+    """
+    Analyze the conversation and decide whether the agent's personality should be updated.
+    
+    This function is called after a certain number of chat rounds to determine if the
+    agent's personality prompt should be adjusted based on the conversation patterns.
+    
+    Args:
+        session: ChatSession object
+        agent_config: AgentConfiguration object
+        api_key: OpenAI API key (optional)
+        base_url: OpenAI base URL (optional)
+    
+    Returns:
+        dict: Decision result with keys:
+            - should_update: bool indicating if personality should be updated
+            - reason: explanation for the decision
+            - suggested_personality: optional suggested personality prompt
+            - confidence: confidence score (0.0 to 1.0)
+    """
+    # Get session information
+    message_count = session.message_count
+    current_personality = agent_config.parameters.get('personality_prompt', '')
+    
+    # Only consider updating after a minimum number of messages
+    MIN_MESSAGES_FOR_UPDATE = 20
+    
+    if message_count < MIN_MESSAGES_FOR_UPDATE:
+        return {
+            'should_update': False,
+            'reason': f'Not enough messages yet (need at least {MIN_MESSAGES_FOR_UPDATE}, have {message_count})',
+            'suggested_personality': None,
+            'confidence': 0.0
+        }
+    
+    # If no API key provided, use simple heuristic
+    if not api_key:
+        # Simple heuristic: suggest update every 50 messages if personality is empty or basic
+        if message_count % 50 == 0:
+            if not current_personality:
+                return {
+                    'should_update': True,
+                    'reason': 'No personality set, consider adding one based on conversation',
+                    'suggested_personality': 'You are a helpful and friendly assistant.',
+                    'confidence': 0.5
+                }
+        
+        return {
+            'should_update': False,
+            'reason': 'No API key available for advanced analysis',
+            'suggested_personality': None,
+            'confidence': 0.0
+        }
+    
+    try:
+        # Configure OpenAI client
+        client_kwargs = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        
+        client = openai.OpenAI(**client_kwargs)
+        
+        # Get recent chat history (last 30 messages for analysis)
+        recent_messages = session.chat_infos.order_by('-chat_date')[:30]
+        conversation_text = ""
+        for chat in reversed(recent_messages):
+            role = "User" if chat.is_user else "AI"
+            conversation_text += f"{role}: {chat.message}\n"
+        
+        # Analyze conversation patterns
+        current_personality_text = current_personality if current_personality else "No specific personality set"
+        
+        prompt = f"""You are analyzing a chat conversation to determine if the AI agent's personality should be updated.
+
+Current personality prompt: "{current_personality_text}"
+Message count: {message_count}
+Session summary: {session.summary or "No summary available"}
+
+Recent conversation:
+{conversation_text}
+
+Based on this conversation, analyze:
+1. Is the current personality appropriate for the user's needs?
+2. What communication style does the user prefer? (formal/casual, detailed/concise, etc.)
+3. Are there any patterns in the conversation that suggest a different personality would work better?
+4. Would updating the personality improve the user experience?
+
+Consider:
+- User's language style and formality
+- Topics being discussed
+- Level of detail the user prefers
+- Whether the user seems satisfied with current responses
+- Consistency of conversation topics
+
+Respond ONLY with a JSON object in this exact format:
+{{"should_update": true/false, "reason": "explanation", "suggested_personality": "new personality prompt or null", "confidence": 0.0-1.0}}
+
+The suggested_personality should be a clear, concise prompt that describes how the AI should behave."""
+
+        # Get model from agent configuration
+        model = agent_config.parameters.get("model", "gpt-3.5-turbo")
+        
+        # Call OpenAI API for analysis
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are an expert at analyzing conversations and determining optimal AI personality configurations. Always respond with valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7
+        )
+        
+        result_text = response.choices[0].message.content.strip()
+        
+        # Parse JSON response
+        import json
+        try:
+            result = json.loads(result_text)
+        except json.JSONDecodeError as e:
+            # If JSON parsing fails, return no update
+            return {
+                'should_update': False,
+                'reason': f'Failed to parse AI response: {str(e)}',
+                'suggested_personality': None,
+                'confidence': 0.0
+            }
+        
+        # Validate response structure
+        required_keys = ['should_update', 'reason', 'suggested_personality', 'confidence']
+        if not all(key in result for key in required_keys):
+            raise ValueError("Missing required keys in response")
+        
+        return result
+    
+    except Exception as e:
+        # Fallback on error
+        return {
+            'should_update': False,
+            'reason': f'Error analyzing conversation: {str(e)}',
+            'suggested_personality': None,
+            'confidence': 0.0
+        }
+
+
 def DecisionModule(session, agent_config, api_key=None, base_url=None):
     """
     Make an AI-based decision on whether to proactively continue or start a new topic.

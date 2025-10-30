@@ -136,3 +136,24 @@ OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
 # Scheduler Configuration
 SCHEDULER_CHECK_INTERVAL_MINUTES = int(os.getenv('SCHEDULER_CHECK_INTERVAL_MINUTES', '5'))
 
+# Celery Configuration
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+
+# Celery Beat Schedule (for periodic tasks)
+CELERY_BEAT_SCHEDULE = {
+    'check-session-inactivity': {
+        'task': 'agent.tasks.check_all_sessions_inactivity_task',
+        'schedule': SCHEDULER_CHECK_INTERVAL_MINUTES * 60.0,  # Convert minutes to seconds
+    },
+    'check-personality-updates': {
+        'task': 'agent.tasks.check_personality_updates_task',
+        'schedule': 1200.0,  # Every 20 minutes
+    },
+}
+
