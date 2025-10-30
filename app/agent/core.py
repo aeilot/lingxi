@@ -44,11 +44,12 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
             messages=messages
         )
         text = response.choices[0].message.content
-        md = (
-            MarkdownIt('commonmark', {'breaks':True,'html':False})
-            .enable('table')
-        )
-        return md.render(text)
+        # print(text)
+        # md = (
+        #     MarkdownIt('commonmark', {'breaks':True,'html':False})
+        #     .enable('table')
+        # )
+        return text
         # print(text)
         # return text
     
