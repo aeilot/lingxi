@@ -55,3 +55,5 @@ class ChatSession(models.Model):
         related_name="sessions"
     )
     current_state = models.JSONField(blank=True, null=True, verbose_name="Current State", help_text="The current state of the chat session.")
+    summary = models.TextField(blank=True, null=True, verbose_name="Session Summary", help_text="The current summary of the chat session.")
+    message_count = models.IntegerField(default=0, verbose_name="Message Count", help_text="The number of messages in this session.")
