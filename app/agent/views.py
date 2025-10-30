@@ -205,10 +205,10 @@ def get_session_history(request, session_id):
         messages = session.chat_infos.all().order_by('chat_date')
         
         # Get IDs of unread messages before marking them as read
-        unread_message_ids = list(session.chat_infos.filter(is_agent=True, is_read=False).values_list('id', flat=True))
+        unread_message_ids = set(session.chat_infos.filter(is_agent=True, is_read=False).values_list('id', flat=True))
         
         # Find the first unread message ID for divider placement
-        first_unread_id = unread_message_ids[0] if unread_message_ids else None
+        first_unread_id = min(unread_message_ids) if unread_message_ids else None
         
         # Mark all AI messages as read when user loads session history
         session.chat_infos.filter(is_agent=True, is_read=False).update(is_read=True)
