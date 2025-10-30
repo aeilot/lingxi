@@ -133,3 +133,6 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
 OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
 
+# Scheduler Configuration
+SCHEDULER_CHECK_INTERVAL_MINUTES = int(os.getenv('SCHEDULER_CHECK_INTERVAL_MINUTES', '5'))
+
