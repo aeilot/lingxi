@@ -204,6 +204,12 @@ def get_session_history(request, session_id):
         session = ChatSession.objects.get(id=session_id)
         messages = session.chat_infos.all().order_by('chat_date')
         
+        # Get IDs of unread messages before marking them as read
+        unread_message_ids = set(session.chat_infos.filter(is_agent=True, is_read=False).values_list('id', flat=True))
+        
+        # Find the first unread message ID for divider placement
+        first_unread_id = min(unread_message_ids) if unread_message_ids else None
+        
         # Mark all AI messages as read when user loads session history
         session.chat_infos.filter(is_agent=True, is_read=False).update(is_read=True)
         
@@ -214,13 +220,15 @@ def get_session_history(request, session_id):
                 "message": msg.message,
                 "is_user": msg.is_user,
                 "is_agent": msg.is_agent,
-                "chat_date": msg.chat_date.isoformat()
+                "chat_date": msg.chat_date.isoformat(),
+                "was_unread": msg.id in unread_message_ids
             })
         
         return JsonResponse({
             "session_id": session.id,
             "started_at": session.started_at.isoformat(),
-            "messages": history
+            "messages": history,
+            "first_unread_id": first_unread_id
         })
     except ChatSession.DoesNotExist:
         return JsonResponse({"error": "Session not found."}, status=404)
@@ -234,6 +242,9 @@ def list_sessions(request):
         message_count = session.chat_infos.count()
         last_message = session.chat_infos.order_by('-chat_date').first()
         
+        # Count unread AI messages in this session
+        unread_count = session.chat_infos.filter(is_agent=True, is_read=False).count()
+        
         # Use summary if available, otherwise fall back to last message
         display_text = session.summary if session.summary else (last_message.message if last_message else "No messages yet")
         
@@ -242,7 +253,8 @@ def list_sessions(request):
             "started_at": session.started_at.isoformat(),
             "message_count": message_count,
             "summary": display_text,
-            "last_message_date": last_message.chat_date.isoformat() if last_message else None
+            "last_message_date": last_message.chat_date.isoformat() if last_message else None,
+            "unread_count": unread_count
         })
     
     return JsonResponse({"sessions": sessions_data})

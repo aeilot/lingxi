@@ -235,6 +235,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (session.id === currentSessionId) {
                         sessionItem.classList.add("active");
                     }
+                    
+                    // Add unread class if there are unread messages
+                    if (session.unread_count && session.unread_count > 0) {
+                        sessionItem.classList.add("unread");
+                    }
 
                     const date = new Date(session.started_at);
                     const timeStr = date.toLocaleString();
@@ -267,7 +272,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (data.messages.length === 0) {
                     chatMessages.innerHTML = '<div class="empty-state">No messages in this session yet.</div>';
                 } else {
-                    data.messages.forEach((msg) => {
+                    data.messages.forEach((msg, index) => {
+                        // Add divider before the first unread message
+                        if (data.first_unread_id && msg.id === data.first_unread_id) {
+                            const divider = document.createElement("div");
+                            divider.classList.add("unread-divider");
+                            divider.innerHTML = '<span class="unread-divider-text">New Messages</span>';
+                            chatMessages.appendChild(divider);
+                        }
+                        
                         const className = msg.is_user ? "user-message" : "ai-message";
                         const sender = msg.is_user ? "You" : "AI";
                         appendMessage(sender, msg.message, className);
