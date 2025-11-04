@@ -42,6 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const closeModal = document.querySelector(".close");
     const saveSettingsBtn = document.getElementById("save-settings-btn");
     const clearSettingsBtn = document.getElementById("clear-settings-btn");
+    const exportDataBtn = document.getElementById("export-data-btn");
     const personalityPromptInput = document.getElementById("personality-prompt-input");
 
     // Load sessions on page load
@@ -88,6 +89,9 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Handle clear settings
     clearSettingsBtn.addEventListener("click", clearPersonalityPrompt);
+    
+    // Handle export data
+    exportDataBtn.addEventListener("click", exportData);
 
     function sendMessage() {
         const userMessage = chatInput.value.trim();
@@ -402,6 +406,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 console.error("Error clearing personality prompt:", error);
                 alert("An error occurred while clearing.");
             });
+    }
+    
+    function exportData() {
+        // Trigger download by navigating to the export endpoint
+        window.location.href = "/api/export/data";
+        
+        // Show a success message after a short delay
+        setTimeout(() => {
+            alert("Export started! Your data will be downloaded as a JSON file.");
+        }, 500);
     }
     
     // Periodically check for session inactivity and proactive suggestions

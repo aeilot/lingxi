@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from .models import ChatSession, ChatInformation, AgentConfiguration
 from django.utils import timezone
@@ -7,6 +7,7 @@ from urllib.parse import unquote
 from .core import generate_response, generate_session_summary, DecisionModule, decide_personality_update
 from django.conf import settings
 from datetime import timedelta
+import json
 
 
 # Create your views here.
@@ -481,5 +482,74 @@ def acknowledge_new_messages(request, session_id):
         except ChatSession.DoesNotExist:
             return JsonResponse({"error": "Session not found."}, status=404)
     return JsonResponse({"error": "Invalid request method."}, status=400)
+
+def export_data(request):
+    """Export all personality settings and chat history as JSON"""
+    try:
+        # Get the default agent configuration for personality settings
+        agent_config = AgentConfiguration.objects.filter(name="default").first()
+        
+        # Prepare personality settings
+        personality_data = {
+            "personality_prompt": "",
+            "model": settings.OPENAI_MODEL
+        }
+        
+        if agent_config:
+            personality_data["personality_prompt"] = agent_config.parameters.get("personality_prompt", "")
+            personality_data["model"] = agent_config.parameters.get("model", settings.OPENAI_MODEL)
+        
+        # Get all chat sessions with their history
+        sessions = ChatSession.objects.all().order_by('-started_at')
+        sessions_data = []
+        
+        for session in sessions:
+            messages = session.chat_infos.all().order_by('chat_date')
+            messages_list = []
+            
+            for msg in messages:
+                messages_list.append({
+                    "id": msg.id,
+                    "message": msg.message,
+                    "is_user": msg.is_user,
+                    "is_agent": msg.is_agent,
+                    "is_agent_growth": msg.is_agent_growth,
+                    "chat_date": msg.chat_date.isoformat(),
+                    "is_read": msg.is_read,
+                    "metadata": msg.metadata,
+                    "critical": msg.critical,
+                    "critical_type": msg.critical_type
+                })
+            
+            sessions_data.append({
+                "id": session.id,
+                "started_at": session.started_at.isoformat(),
+                "message_count": session.message_count,
+                "summary": session.summary,
+                "last_activity_at": session.last_activity_at.isoformat() if session.last_activity_at else None,
+                "current_state": session.current_state,
+                "messages": messages_list
+            })
+        
+        # Combine all data
+        export_data = {
+            "export_date": timezone.now().isoformat(),
+            "personality_settings": personality_data,
+            "sessions": sessions_data,
+            "total_sessions": len(sessions_data),
+            "total_messages": sum(s["message_count"] for s in sessions_data)
+        }
+        
+        # Create JSON response with proper headers for download
+        response = HttpResponse(
+            json.dumps(export_data, indent=2, ensure_ascii=False),
+            content_type='application/json'
+        )
+        response['Content-Disposition'] = f'attachment; filename="lingxi_export_{timezone.now().strftime("%Y%m%d_%H%M%S")}.json"'
+        
+        return response
+        
+    except Exception as e:
+        return JsonResponse({"error": f"Export failed: {str(e)}"}, status=500)
 
 
