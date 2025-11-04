@@ -8,6 +8,9 @@ from .core import generate_response, generate_session_summary, DecisionModule, d
 from django.conf import settings
 from datetime import timedelta
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # Create your views here.
@@ -486,6 +489,9 @@ def acknowledge_new_messages(request, session_id):
 def export_data(request):
     """Export all personality settings and chat history as JSON"""
     try:
+        # Get current timestamp for consistency
+        export_timestamp = timezone.now()
+        
         # Get the default agent configuration for personality settings
         agent_config = AgentConfiguration.objects.filter(name="default").first()
         
@@ -533,7 +539,7 @@ def export_data(request):
         
         # Combine all data
         export_data = {
-            "export_date": timezone.now().isoformat(),
+            "export_date": export_timestamp.isoformat(),
             "personality_settings": personality_data,
             "sessions": sessions_data,
             "total_sessions": len(sessions_data),
@@ -545,14 +551,12 @@ def export_data(request):
             json.dumps(export_data, indent=2, ensure_ascii=False),
             content_type='application/json'
         )
-        response['Content-Disposition'] = f'attachment; filename="lingxi_export_{timezone.now().strftime("%Y%m%d_%H%M%S")}.json"'
+        response['Content-Disposition'] = f'attachment; filename="lingxi_export_{export_timestamp.strftime("%Y%m%d_%H%M%S")}.json"'
         
         return response
         
     except Exception as e:
         # Log the error internally for debugging
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"Export failed: {str(e)}", exc_info=True)
         # Return generic error message to client
         return JsonResponse({"error": "Export failed. Please try again later."}, status=500)
