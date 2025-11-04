@@ -35,4 +35,5 @@ urlpatterns = [
     path('api/sessions/<int:session_id>/acknowledge-messages', views.acknowledge_new_messages, name='acknowledge_new_messages'),
     path('api/personality/update', views.update_personality_prompt, name='update_personality_prompt'),
     path('api/personality/get', views.get_personality_prompt, name='get_personality_prompt'),
+    path('api/export/data', views.export_data, name='export_data'),
 ]
