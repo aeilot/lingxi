@@ -411,11 +411,6 @@ document.addEventListener("DOMContentLoaded", () => {
     function exportData() {
         // Trigger download by navigating to the export endpoint
         window.location.href = "/api/export/data";
-        
-        // Show a success message after a short delay
-        setTimeout(() => {
-            alert("Export started! Your data will be downloaded as a JSON file.");
-        }, 500);
     }
     
     // Periodically check for session inactivity and proactive suggestions

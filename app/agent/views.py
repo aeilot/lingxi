@@ -550,6 +550,11 @@ def export_data(request):
         return response
         
     except Exception as e:
-        return JsonResponse({"error": f"Export failed: {str(e)}"}, status=500)
+        # Log the error internally for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Export failed: {str(e)}", exc_info=True)
+        # Return generic error message to client
+        return JsonResponse({"error": "Export failed. Please try again later."}, status=500)
 
 
