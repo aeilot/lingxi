@@ -859,3 +859,34 @@ body {
     }
 }
 
+/* Export notification styles */
+.export-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 16px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: white;
+    opacity: 0;
+    transform: translateY(-20px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.export-notification.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.export-notification.success {
+    background-color: #34c759;
+}
+
+.export-notification.error {
+    background-color: #ff3b30;
+}
+
+
