@@ -409,8 +409,89 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     
     function exportData() {
-        // Trigger download by navigating to the export endpoint
-        window.location.href = "/api/export/data";
+        // Disable the export button to prevent double clicks
+        const exportBtn = document.getElementById("export-data-btn");
+        const originalText = exportBtn.textContent;
+        exportBtn.disabled = true;
+        exportBtn.textContent = "Exporting...";
+        
+        // Use fetch API for better error handling and user feedback
+        fetch("/api/export/data", {
+            method: "GET",
+            headers: {
+                "X-CSRFToken": csrftoken,
+            },
+        })
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`Export failed with status: ${response.status}`);
+                }
+                
+                // Get the filename from Content-Disposition header
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = 'lingxi_export.json';
+                if (contentDisposition) {
+                    const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+                    if (filenameMatch) {
+                        filename = filenameMatch[1];
+                    }
+                }
+                
+                // Convert response to blob for download
+                return response.blob().then(blob => ({ blob, filename }));
+            })
+            .then(({ blob, filename }) => {
+                // Create a temporary download link
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = filename;
+                
+                // Trigger download
+                document.body.appendChild(a);
+                a.click();
+                
+                // Cleanup
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                // Show success notification
+                showExportNotification("Export successful!", "success");
+                
+                // Close the modal after a short delay
+                setTimeout(() => {
+                    settingsModal.style.display = "none";
+                }, 1000);
+            })
+            .catch((error) => {
+                console.error("Error exporting data:", error);
+                showExportNotification("Export failed. Please try again.", "error");
+            })
+            .finally(() => {
+                // Re-enable the export button
+                exportBtn.disabled = false;
+                exportBtn.textContent = originalText;
+            });
+    }
+    
+    function showExportNotification(message, type) {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `export-notification ${type}`;
+        notification.textContent = message;
+        
+        // Add to document
+        document.body.appendChild(notification);
+        
+        // Show with animation
+        setTimeout(() => notification.classList.add('show'), 10);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
     }
     
     // Periodically check for session inactivity and proactive suggestions
