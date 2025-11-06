@@ -12,8 +12,6 @@
  *   node example_api_usage.js
  */
 
-const baseURL = 'http://localhost:8000';
-
 class LingxiClient {
   constructor(baseURL = 'http://localhost:8000') {
     this.baseURL = baseURL;
