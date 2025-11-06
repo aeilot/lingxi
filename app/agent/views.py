@@ -1,10 +1,10 @@
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
-from .models import ChatSession, ChatInformation, AgentConfiguration
+from .models import ChatSession, ChatInformation, AgentConfiguration, Agent
 from django.utils import timezone
 from urllib.parse import unquote
-from .core import generate_response, generate_session_summary, DecisionModule, decide_personality_update
+from .core import generate_response, generate_multi_agent_responses, generate_session_summary, DecisionModule, decide_personality_update
 from django.conf import settings
 from datetime import timedelta
 import json
@@ -26,9 +26,13 @@ def chat_ui(request):
     # Get all chat sessions for display
     sessions = ChatSession.objects.all().order_by('-started_at')
     
+    # Get all agents for the UI
+    agents = Agent.objects.filter(is_active=True).order_by('name')
+    
     context = {
         'sessions': sessions,
-        'agent_config': agent_config
+        'agent_config': agent_config,
+        'agents': agents,
     }
     return render(request, "chat_ui.html", context)
 
@@ -62,6 +66,12 @@ def handle_user_input(request):
         else:
             session = ChatSession.objects.create(agent_configuration=agent_config)
         
+        # Ensure session has agents assigned
+        if session.agents.count() == 0:
+            # Assign all active agents to new sessions
+            active_agents = Agent.objects.filter(is_active=True)
+            session.agents.set(active_agents)
+        
         # Mark all previous AI messages as read when user sends a message
         # (User is obviously viewing the conversation)
         session.chat_infos.filter(is_agent=True, is_read=False).update(is_read=True)
@@ -74,34 +84,58 @@ def handle_user_input(request):
         )
         session.chat_infos.add(user_chat)
         
-        # Generate response using OpenAI API or simulated response
-        model_response = generate_response(user_message, agent_config, session, api_key=api_key, base_url=base_url)
+        # Generate multi-agent responses
+        agent_responses = generate_multi_agent_responses(
+            user_message, 
+            agent_config, 
+            session, 
+            api_key=api_key, 
+            base_url=base_url
+        )
         
-        # Handle split messages or single message
-        ai_message_ids = []
-        messages_list = []
+        # Handle agent responses
+        all_messages = []
         
-        if isinstance(model_response, dict) and "messages" in model_response:
-            # LLM returned split messages
-            for msg_text in model_response["messages"]:
+        for agent_response in agent_responses:
+            agent = agent_response["agent"]
+            model_response = agent_response["response"]
+            
+            # Handle split messages or single message for each agent
+            if isinstance(model_response, dict) and "messages" in model_response:
+                # LLM returned split messages
+                for msg_text in model_response["messages"]:
+                    ai_chat = ChatInformation.objects.create(
+                        message=msg_text,
+                        is_user=False,
+                        is_agent=True,
+                        agent=agent
+                    )
+                    session.chat_infos.add(ai_chat)
+                    all_messages.append({
+                        "id": ai_chat.id,
+                        "message": msg_text,
+                        "agent_id": agent.id,
+                        "agent_name": agent.name,
+                        "agent_emoji": agent.avatar_emoji,
+                        "agent_color": agent.color
+                    })
+            else:
+                # Single message (plain text)
                 ai_chat = ChatInformation.objects.create(
-                    message=msg_text,
+                    message=model_response,
                     is_user=False,
-                    is_agent=True
+                    is_agent=True,
+                    agent=agent
                 )
                 session.chat_infos.add(ai_chat)
-                ai_message_ids.append(ai_chat.id)
-                messages_list.append(msg_text)
-        else:
-            # Single message (plain text)
-            ai_chat = ChatInformation.objects.create(
-                message=model_response,
-                is_user=False,
-                is_agent=True
-            )
-            session.chat_infos.add(ai_chat)
-            ai_message_ids.append(ai_chat.id)
-            messages_list.append(model_response)
+                all_messages.append({
+                    "id": ai_chat.id,
+                    "message": model_response,
+                    "agent_id": agent.id,
+                    "agent_name": agent.name,
+                    "agent_emoji": agent.avatar_emoji,
+                    "agent_color": agent.color
+                })
         
         # Update message count and last activity time
         session.message_count = session.chat_infos.count()
@@ -155,22 +189,13 @@ def handle_user_input(request):
         response_data = {
             "session_id": session.id,
             "user_message_id": user_chat.id,
+            "messages": all_messages  # New multi-agent format
         }
         
-        # Support both old single-message format and new split-message format
-        if len(messages_list) == 1:
-            # Single message - use legacy format for backward compatibility
-            response_data["response"] = messages_list[0]
-            response_data["ai_message_id"] = ai_message_ids[0]
-        else:
-            # Multiple messages - new format
-            response_data["messages"] = [
-                {"id": msg_id, "message": msg_text} 
-                for msg_id, msg_text in zip(ai_message_ids, messages_list)
-            ]
-            # Also include the first message in 'response' for partial backward compatibility
-            response_data["response"] = messages_list[0]
-            response_data["ai_message_id"] = ai_message_ids[0]
+        # Include backward compatibility fields if there's at least one message
+        if all_messages:
+            response_data["response"] = all_messages[0]["message"]
+            response_data["ai_message_id"] = all_messages[0]["id"]
         
         # Include updated summary if it was changed
         if summary_updated:
@@ -219,20 +244,33 @@ def get_session_history(request, session_id):
         
         history = []
         for msg in messages:
-            history.append({
+            msg_data = {
                 "id": msg.id,
                 "message": msg.message,
                 "is_user": msg.is_user,
                 "is_agent": msg.is_agent,
                 "chat_date": msg.chat_date.isoformat(),
                 "was_unread": msg.id in unread_message_ids
-            })
+            }
+            # Add agent information for multi-agent messages
+            if msg.agent:
+                msg_data["agent_id"] = msg.agent.id
+                msg_data["agent_name"] = msg.agent.name
+                msg_data["agent_emoji"] = msg.agent.avatar_emoji
+                msg_data["agent_color"] = msg.agent.color
+            history.append(msg_data)
+        
+        # Get session agents
+        session_agents = list(session.agents.filter(is_active=True).values(
+            'id', 'name', 'avatar_emoji', 'color', 'personality_prompt'
+        ))
         
         return JsonResponse({
             "session_id": session.id,
             "started_at": session.started_at.isoformat(),
             "messages": history,
-            "first_unread_id": first_unread_id
+            "first_unread_id": first_unread_id,
+            "agents": session_agents
         })
     except ChatSession.DoesNotExist:
         return JsonResponse({"error": "Session not found."}, status=404)
@@ -560,5 +598,109 @@ def export_data(request):
         logger.error(f"Export failed: {str(e)}", exc_info=True)
         # Return generic error message to client
         return JsonResponse({"error": "Export failed. Please try again later."}, status=500)
+
+
+# Agent Management Endpoints
+
+def list_agents(request):
+    """List all available AI agents"""
+    agents = Agent.objects.filter(is_active=True).order_by('name')
+    agents_data = []
+    
+    for agent in agents:
+        agents_data.append({
+            "id": agent.id,
+            "name": agent.name,
+            "personality_prompt": agent.personality_prompt,
+            "avatar_emoji": agent.avatar_emoji,
+            "color": agent.color,
+            "is_active": agent.is_active
+        })
+    
+    return JsonResponse({"agents": agents_data})
+
+
+def get_agent(request, agent_id):
+    """Get details of a specific agent"""
+    try:
+        agent = Agent.objects.get(id=agent_id)
+        return JsonResponse({
+            "id": agent.id,
+            "name": agent.name,
+            "personality_prompt": agent.personality_prompt,
+            "avatar_emoji": agent.avatar_emoji,
+            "color": agent.color,
+            "is_active": agent.is_active
+        })
+    except Agent.DoesNotExist:
+        return JsonResponse({"error": "Agent not found."}, status=404)
+
+
+def update_agent(request, agent_id):
+    """Update an agent's details"""
+    if request.method == "POST":
+        try:
+            agent = Agent.objects.get(id=agent_id)
+            
+            # Update fields if provided
+            if "personality_prompt" in request.POST:
+                agent.personality_prompt = request.POST.get("personality_prompt")
+            if "name" in request.POST:
+                agent.name = request.POST.get("name")
+            if "avatar_emoji" in request.POST:
+                agent.avatar_emoji = request.POST.get("avatar_emoji")
+            if "color" in request.POST:
+                agent.color = request.POST.get("color")
+            if "is_active" in request.POST:
+                agent.is_active = request.POST.get("is_active").lower() == "true"
+            
+            agent.save()
+            
+            return JsonResponse({
+                "success": True,
+                "agent": {
+                    "id": agent.id,
+                    "name": agent.name,
+                    "personality_prompt": agent.personality_prompt,
+                    "avatar_emoji": agent.avatar_emoji,
+                    "color": agent.color,
+                    "is_active": agent.is_active
+                }
+            })
+        except Agent.DoesNotExist:
+            return JsonResponse({"error": "Agent not found."}, status=404)
+    return JsonResponse({"error": "Invalid request method."}, status=400)
+
+
+def update_session_agents(request, session_id):
+    """Update which agents are active in a session"""
+    if request.method == "POST":
+        try:
+            session = ChatSession.objects.get(id=session_id)
+            
+            # Get agent IDs from request
+            agent_ids_str = request.POST.get("agent_ids", "")
+            if agent_ids_str:
+                agent_ids = [int(id.strip()) for id in agent_ids_str.split(",") if id.strip()]
+                agents = Agent.objects.filter(id__in=agent_ids, is_active=True)
+                session.agents.set(agents)
+            else:
+                # If no agents specified, assign all active agents
+                active_agents = Agent.objects.filter(is_active=True)
+                session.agents.set(active_agents)
+            
+            session.save()
+            
+            # Return updated agent list
+            session_agents = list(session.agents.values('id', 'name', 'avatar_emoji', 'color'))
+            
+            return JsonResponse({
+                "success": True,
+                "session_id": session.id,
+                "agents": session_agents
+            })
+        except ChatSession.DoesNotExist:
+            return JsonResponse({"error": "Session not found."}, status=404)
+    return JsonResponse({"error": "Invalid request method."}, status=400)
 
 

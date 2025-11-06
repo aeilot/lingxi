@@ -33,7 +33,11 @@ urlpatterns = [
     path('api/sessions/<int:session_id>/personality-dismiss', views.dismiss_personality_suggestion, name='dismiss_personality_suggestion'),
     path('api/sessions/<int:session_id>/new-messages', views.check_new_messages, name='check_new_messages'),
     path('api/sessions/<int:session_id>/acknowledge-messages', views.acknowledge_new_messages, name='acknowledge_new_messages'),
+    path('api/sessions/<int:session_id>/agents', views.update_session_agents, name='update_session_agents'),
     path('api/personality/update', views.update_personality_prompt, name='update_personality_prompt'),
     path('api/personality/get', views.get_personality_prompt, name='get_personality_prompt'),
     path('api/export/data', views.export_data, name='export_data'),
+    path('api/agents/list', views.list_agents, name='list_agents'),
+    path('api/agents/<int:agent_id>', views.get_agent, name='get_agent'),
+    path('api/agents/<int:agent_id>/update', views.update_agent, name='update_agent'),
 ]

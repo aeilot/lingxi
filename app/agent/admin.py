@@ -1,12 +1,19 @@
 from django.contrib import admin
-from .models import ChatInformation, ChatSummary, AgentConfiguration, ChatSession
+from .models import ChatInformation, ChatSummary, AgentConfiguration, ChatSession, Agent
 
 # Register your models here.
 
+@admin.register(Agent)
+class AgentAdmin(admin.ModelAdmin):
+    list_display = ('name', 'avatar_emoji', 'color', 'is_active', 'created_at')
+    list_filter = ('is_active', 'created_at')
+    search_fields = ('name', 'personality_prompt')
+    readonly_fields = ('created_at', 'updated_at')
+
 @admin.register(ChatInformation)
 class ChatInformationAdmin(admin.ModelAdmin):
-    list_display = ('chat_date', 'message', 'is_user', 'is_agent', 'critical')
-    list_filter = ('is_user', 'is_agent', 'is_agent_growth', 'critical', 'chat_date')
+    list_display = ('chat_date', 'message', 'is_user', 'is_agent', 'agent', 'critical')
+    list_filter = ('is_user', 'is_agent', 'is_agent_growth', 'critical', 'chat_date', 'agent')
     search_fields = ('message',)
     readonly_fields = ('chat_date',)
 
@@ -26,7 +33,7 @@ class AgentConfigurationAdmin(admin.ModelAdmin):
 
 @admin.register(ChatSession)
 class ChatSessionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'agent_configuration', 'started_at')
+    list_display = ('id', 'agent_configuration', 'started_at', 'message_count')
     list_filter = ('started_at', 'agent_configuration')
     readonly_fields = ('started_at',)
-    filter_horizontal = ('chat_infos', 'summaries')
+    filter_horizontal = ('chat_infos', 'summaries', 'agents')

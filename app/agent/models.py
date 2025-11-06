@@ -1,5 +1,21 @@
 from django.db import models
 
+# Agent Model - represents individual AI agents with unique personalities
+class Agent(models.Model):
+    name = models.CharField(max_length=100, verbose_name="Agent Name", help_text="The name of the agent (e.g., 'Alice', 'Bob').")
+    personality_prompt = models.TextField(verbose_name="Personality Prompt", help_text="The personality description for this agent.")
+    avatar_emoji = models.CharField(max_length=10, default="🤖", verbose_name="Avatar Emoji", help_text="Emoji representing this agent.")
+    color = models.CharField(max_length=20, default="#4A90E2", verbose_name="Color", help_text="Color code for UI representation.")
+    is_active = models.BooleanField(default=True, verbose_name="Is Active", help_text="Whether this agent is currently active.")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created At", help_text="When this agent was created.")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Updated At", help_text="When this agent was last updated.")
+    
+    def __str__(self):
+        return self.name
+    
+    class Meta:
+        ordering = ['name']
+
 # Basic Models
 class ChatInformation(models.Model):
     chat_date = models.DateTimeField(auto_now_add=True, verbose_name="Chat Date", help_text="The date and time when the chat was created.")
@@ -11,6 +27,7 @@ class ChatInformation(models.Model):
     metadata = models.JSONField(blank=True, null=True, verbose_name="Metadata", help_text="Additional metadata related to the chat.")
     critical = models.BooleanField(default=False, verbose_name="Critical", help_text="Indicates if the chat is marked as critical.")
     critical_type = models.CharField(max_length=100, blank=True, null=True, verbose_name="Critical Type", help_text="The type, if applicable.")
+    agent = models.ForeignKey('Agent', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Agent", help_text="The specific agent that sent this message (for multi-agent chats).", related_name="messages")
 
 class ChatSummary(models.Model):
     summary_start_time = models.DateTimeField(verbose_name="Summary Start Time", help_text="The start time of the summarized chat.")
@@ -39,6 +56,13 @@ class ChatSession(models.Model):
         on_delete=models.CASCADE,
         verbose_name="Agent Configuration",
         help_text="The agent configuration associated with this chat session."
+    )
+    agents = models.ManyToManyField(
+        'Agent',
+        blank=True,
+        verbose_name="Active Agents",
+        help_text="The agents participating in this chat session.",
+        related_name="sessions"
     )
     started_at = models.DateTimeField(auto_now_add=True, verbose_name="Started At", help_text="The date and time when the chat session started.")
     chat_infos = models.ManyToManyField(

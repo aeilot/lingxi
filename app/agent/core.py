@@ -1,9 +1,10 @@
-from agent.models import AgentConfiguration, ChatSession, ChatInformation
+from agent.models import AgentConfiguration, ChatSession, ChatInformation, Agent
 from django.utils import timezone
 from django.db import models
 import openai
 from markdown_it import MarkdownIt
 import json
+import random
 
 # System prompt template for split message feature
 SPLIT_MESSAGE_SYSTEM_PROMPT = """You can optionally split your response into multiple messages for better readability.
@@ -20,9 +21,17 @@ Important:
 - Reply in the sender's language"""
 
 
-def generate_response(user_message, agent_config, session, api_key=None, base_url=None):
+def generate_response(user_message, agent_config, session, api_key=None, base_url=None, agent=None):
     """
     Generate a response from the OpenAI API based on user message and agent configuration.
+
+    Args:
+        user_message: The user's message
+        agent_config: Agent configuration object
+        session: Chat session object
+        api_key: OpenAI API key (optional)
+        base_url: OpenAI base URL (optional)
+        agent: Specific Agent object to use for personality (optional)
 
     Returns:
         dict or str: If the LLM returns valid JSON with split messages, returns a dict like:
@@ -31,7 +40,8 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
     """
     # If no API key is provided, fall back to simulated response
     if not api_key:
-        return f"Simulated response to: {user_message}"
+        agent_name = agent.name if agent else "AI"
+        return f"{agent_name}: Simulated response to: {user_message}"
 
     try:
         # Configure OpenAI client
@@ -44,8 +54,13 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
         # Get recent chat history from session (limit to last 20 messages for performance)
         messages = []
 
-        # Add system message with personality prompt if configured
-        personality_prompt = agent_config.parameters.get("personality_prompt", "")
+        # Add system message with personality prompt
+        # Use agent-specific personality if agent is provided, otherwise use config
+        if agent:
+            personality_prompt = agent.personality_prompt
+        else:
+            personality_prompt = agent_config.parameters.get("personality_prompt", "")
+        
         system_message = ""
 
         if personality_prompt:
@@ -59,7 +74,11 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
         # Reverse to get chronological order
         for chat in reversed(chat_history):
             role = "user" if chat.is_user else "assistant"
-            messages.append({"role": role, "content": chat.message})
+            # Include agent name in message context for multi-agent awareness
+            msg_content = chat.message
+            if chat.agent and not chat.is_user:
+                msg_content = f"[{chat.agent.name}]: {chat.message}"
+            messages.append({"role": role, "content": msg_content})
 
         # Add current user message
         messages.append({"role": "user", "content": user_message})
@@ -109,6 +128,59 @@ def generate_response(user_message, agent_config, session, api_key=None, base_ur
     except Exception as e:
         # Return generic error message without exposing internal details
         return "Error calling OpenAI API: An unexpected error occurred. Please check your settings."
+
+
+def generate_multi_agent_responses(user_message, agent_config, session, api_key=None, base_url=None, num_agents=None):
+    """
+    Generate responses from multiple AI agents in a group chat setting.
+    
+    Args:
+        user_message: The user's message
+        agent_config: Agent configuration object
+        session: Chat session object
+        api_key: OpenAI API key (optional)
+        base_url: OpenAI base URL (optional)
+        num_agents: Number of agents to respond (1-3, default: random 1-2)
+    
+    Returns:
+        list: List of dicts containing agent and their response
+              [{"agent": Agent, "response": str or dict}, ...]
+    """
+    # Get active agents for this session
+    active_agents = list(session.agents.filter(is_active=True))
+    
+    if not active_agents:
+        # If no agents assigned, return empty list
+        return []
+    
+    # Determine how many agents should respond
+    if num_agents is None:
+        # Randomly choose 1-2 agents to respond
+        num_agents = random.choice([1, 2])
+    
+    # Ensure we don't try to get more agents than available
+    num_agents = min(num_agents, len(active_agents))
+    
+    # Randomly select which agents will respond
+    responding_agents = random.sample(active_agents, num_agents)
+    
+    # Generate response from each selected agent
+    responses = []
+    for agent in responding_agents:
+        response = generate_response(
+            user_message, 
+            agent_config, 
+            session, 
+            api_key=api_key, 
+            base_url=base_url,
+            agent=agent
+        )
+        responses.append({
+            "agent": agent,
+            "response": response
+        })
+    
+    return responses
 
 
 def generate_session_summary(session, agent_config, api_key=None, base_url=None):
