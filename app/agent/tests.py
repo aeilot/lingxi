@@ -650,9 +650,10 @@ class PersonalityUpdateTestCase(TestCase):
         """Test that personality update is checked every 20 messages"""
         from unittest.mock import patch, MagicMock
         
-        # Use "default" agent config since that's what the view uses
+        # Use "default" agent config since that's what the view uses (with null user for legacy)
         agent_config = AgentConfiguration.objects.get_or_create(
             name="default",
+            user=None,
             defaults={"parameters": {"model": "gpt-3.5-turbo", "personality_prompt": ""}}
         )[0]
         
@@ -699,9 +700,10 @@ class PersonalityUpdateTestCase(TestCase):
         """Test that personality update is suggested (not auto-applied) for low confidence"""
         from unittest.mock import patch, MagicMock
         
-        # Use "default" agent config since that's what the view uses
+        # Use "default" agent config since that's what the view uses (with null user for legacy)
         agent_config = AgentConfiguration.objects.get_or_create(
             name="default",
+            user=None,
             defaults={"parameters": {"model": "gpt-3.5-turbo", "personality_prompt": ""}}
         )[0]
         
