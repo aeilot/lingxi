@@ -1,4 +1,18 @@
-# Proactive AI
+# Lingxi - AI Chat Backend
+
+A comprehensive backend API for building AI-powered chat applications with multi-user support, agent management, and intelligent conversation features.
+
+## Features
+
+- **RESTful API**: Complete backend API for frontend applications
+- **JWT Authentication**: Secure token-based authentication for multi-user support
+- **Multi-Agent Management**: Create and manage multiple AI agents with different personalities
+- **Chat Sessions**: Organize conversations into sessions with full history
+- **Automatic Summaries**: Session summaries generated every 10 messages
+- **Adaptive Personality**: AI personality automatically adapts based on conversation patterns
+- **Proactive Messaging**: Background tasks for intelligent proactive engagement
+- **Split Messages**: Support for multi-message responses
+- **Read Receipts**: Track message read status
 
 ## Prerequisites
 - Python 3.12 or higher (Python 3.13+ recommended)
@@ -127,25 +141,102 @@ After several rounds of conversation (20+ messages), the system will analyze the
 The personality prompt is stored in the database and persists across sessions.
 
 ## Usage
-- Access the application at `http://127.0.0.1:8000/` after starting the development server.
-- Use UV for managing tasks and tracking project progress.
+
+### Backend API
+
+The application provides a comprehensive REST API for frontend applications. See [API_DOCUMENTATION.md](API_DOCUMENTATION.md) for detailed API documentation.
+
+**Main API Endpoints:**
+
+- `POST /api/auth/login/` - User authentication
+- `POST /api/auth/refresh/` - Refresh JWT token
+- `GET /api/agents/` - List agents
+- `POST /api/agents/` - Create a new agent
+- `PUT /api/agents/{id}/personality/` - Update agent personality
+- `POST /api/chat/` - Send a message and get AI response
+- `GET /api/chat/history/` - Get chat history
+- `GET /api/sessions/` - List chat sessions
+- `POST /api/sessions/` - Create a new session
+
+**Example Usage:**
+
+See the example scripts:
+- Python: `python example_api_usage.py`
+- JavaScript: `node example_api_usage.js`
+
+### Legacy Web UI
+
+Access the legacy web interface at `http://127.0.0.1:8000/` after starting the development server.
+
+### Creating Users
+
+Before using the API, create a user account:
+
+```bash
+cd app
+python manage.py createsuperuser
+```
+
+Or create a regular user via Django shell:
+
+```bash
+cd app
+python manage.py shell
+```
+
+```python
+from django.contrib.auth.models import User
+User.objects.create_user('username', 'email@example.com', 'password')
+```
 
 ## Project Structure
 ```
-proactive-ai/
+lingxi/
 ├── app/
-│   ├── db.sqlite3
-│   ├── manage.py
-│   └── app/
-│       ├── __init__.py
-│       ├── asgi.py
-│       ├── settings.py
-│       ├── urls.py
-│       ├── wsgi.py
-│       └── __pycache__/
-├── pyproject.toml
-└── README.md
+│   ├── agent/
+│   │   ├── models.py          # Data models (User, Agent, Session, Message)
+│   │   ├── api_views.py       # REST API views
+│   │   ├── api_urls.py        # API URL routing
+│   │   ├── serializers.py     # DRF serializers
+│   │   ├── views.py           # Legacy UI views
+│   │   ├── core.py            # AI logic and decision making
+│   │   ├── tasks.py           # Celery background tasks
+│   │   └── tests.py           # Test suite
+│   ├── app/
+│   │   ├── settings.py        # Django settings
+│   │   ├── urls.py            # Main URL routing
+│   │   └── celery.py          # Celery configuration
+│   ├── templates/             # HTML templates (legacy UI)
+│   ├── static/                # Static files (legacy UI)
+│   ├── manage.py              # Django management script
+│   └── db.sqlite3             # SQLite database
+├── API_DOCUMENTATION.md       # Comprehensive API docs
+├── example_api_usage.py       # Python API example
+├── example_api_usage.js       # JavaScript API example
+├── pyproject.toml             # Project dependencies
+└── README.md                  # This file
 ```
+
+## API Architecture
+
+The backend uses Django REST Framework with JWT authentication:
+
+1. **Authentication Layer**: JWT tokens for secure API access
+2. **Multi-User Support**: Each user can have multiple agents and sessions
+3. **Agent Management**: CRUD operations for AI agent configurations
+4. **Chat Engine**: Real-time chat with AI, session management, and history
+5. **Background Tasks**: Celery tasks for proactive features and personality updates
+
+## Technology Stack
+
+- **Backend Framework**: Django 5.2+
+- **API Framework**: Django REST Framework
+- **Authentication**: JWT (Simple JWT)
+- **Database**: SQLite (development) / PostgreSQL (production recommended)
+- **AI Integration**: OpenAI API
+- **Task Queue**: Celery with Redis
+- **Testing**: Django TestCase with DRF APIClient
+
 
 ## Contributing
 Contributions are welcome! Please fork the repository and submit a pull request.
