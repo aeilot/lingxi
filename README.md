@@ -1,4 +1,36 @@
-# Proactive AI
+# Lingxi - Multi-Agent Group Chat AI
+
+A Django-based AI chat application featuring multiple AI agents with distinct personalities, enabling engaging group conversations.
+
+## Features
+
+### 🤖 Multi-Agent Group Chat
+- **Three Unique AI Agents**: Alice (friendly 😊), Bob (professional 🧠), and Charlie (creative 🎨)
+- **Group Conversations**: 1-2 agents respond to each message, creating dynamic discussions
+- **Distinct Personalities**: Each agent has a unique communication style and personality
+- **Visual Identity**: Color-coded messages with emoji avatars for easy agent identification
+
+### 🎨 Rich Chat Experience
+- Modern, responsive UI with Apple-inspired design
+- Session management with conversation history
+- Real-time message delivery
+- Read receipts and unread message indicators
+- Export conversation data
+
+### 🔧 Agent Management
+- Add, edit, and configure AI agents
+- Customize agent personalities, emojis, and colors
+- Activate/deactivate agents per session
+- Admin interface for agent management
+
+### 📊 Advanced Features
+- Automatic conversation summarization (every 10 messages)
+- Proactive messaging based on inactivity
+- Personality adaptation suggestions (every 20 messages)
+- Background task processing with Celery
+- Session state management
+
+See [MULTI_AGENT.md](MULTI_AGENT.md) for detailed documentation on the multi-agent feature.
 
 ## Prerequisites
 - Python 3.12 or higher (Python 3.13+ recommended)
