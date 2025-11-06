@@ -119,46 +119,39 @@ document.addEventListener("DOMContentLoaded", () => {
                     // Remove loading indicator
                     removeLoadingIndicator(loadingMessage);
 
-                    if (data.response || data.messages) {
-                        // Handle split messages (new format) or single message (legacy format)
-                        if (data.messages && Array.isArray(data.messages)) {
-                            // Multiple messages - display each one with a slight delay for effect
-                            data.messages.forEach((msgObj, index) => {
-                                setTimeout(() => {
-                                    // Ensure msgObj has the expected structure
-                                    const message = msgObj.message || msgObj;
-                                    appendMessage("AI", message, "ai-message");
-                                }, index * MESSAGE_DISPLAY_DELAY_MS);
-                            });
-                        } else if (data.response) {
-                            // Single message (legacy format)
-                            appendMessage("AI", data.response, "ai-message");
-                        }
+                    if (data.messages && Array.isArray(data.messages)) {
+                        // Multi-agent messages - display each one with agent info
+                        data.messages.forEach((msgObj, index) => {
+                            setTimeout(() => {
+                                appendAgentMessage(msgObj);
+                            }, index * MESSAGE_DISPLAY_DELAY_MS);
+                        });
+                    } else if (data.response) {
+                        // Legacy single message format (backward compatibility)
+                        appendMessage("AI", data.response, "ai-message");
+                    }
 
-                        // Update current session ID if it was created
-                        if (data.session_id && !currentSessionId) {
-                            currentSessionId = data.session_id;
-                            updateSessionTitle();
-                            loadSessions(); // Refresh session list
-                        }
+                    // Update current session ID if it was created
+                    if (data.session_id && !currentSessionId) {
+                        currentSessionId = data.session_id;
+                        updateSessionTitle();
+                        loadSessions(); // Refresh session list
+                    }
 
-                        // If summary was updated, refresh the session list to show new summary
-                        if (data.summary_updated) {
-                            loadSessions();
-                        }
+                    // If summary was updated, refresh the session list to show new summary
+                    if (data.summary_updated) {
+                        loadSessions();
+                    }
 
-                        // If personality was auto-updated, show notification
-                        if (data.personality_updated) {
-                            showPersonalityUpdateNotification();
-                            loadPersonalityPrompt(); // Refresh personality prompt in settings
-                        }
+                    // If personality was auto-updated, show notification
+                    if (data.personality_updated) {
+                        showPersonalityUpdateNotification();
+                        loadPersonalityPrompt(); // Refresh personality prompt in settings
+                    }
 
-                        // If personality suggestion is available, check and display it
-                        if (data.personality_suggestion_available) {
-                            checkPersonalitySuggestion(currentSessionId);
-                        }
-                    } else {
-                        appendMessage("Error", "Failed to get a response from the server.", "error-message");
+                    // If personality suggestion is available, check and display it
+                    if (data.personality_suggestion_available) {
+                        checkPersonalitySuggestion(currentSessionId);
                     }
                 })
                 .catch(() => {
@@ -176,6 +169,31 @@ document.addEventListener("DOMContentLoaded", () => {
         chatMessages.appendChild(messageElement);
         chatMessages.scrollTop = chatMessages.scrollHeight;
         return messageElement; // Return the element for further manipulation
+    }
+
+    function appendAgentMessage(msgObj) {
+        const messageElement = document.createElement("div");
+        messageElement.classList.add("message", "agent-message");
+        
+        // Add agent-specific styling
+        if (msgObj.agent_color) {
+            messageElement.style.borderLeftColor = msgObj.agent_color;
+        }
+        
+        const agentName = msgObj.agent_name || "AI";
+        const agentEmoji = msgObj.agent_emoji || "🤖";
+        
+        messageElement.innerHTML = `
+            <div class="agent-header">
+                <span class="agent-emoji">${agentEmoji}</span>
+                <strong class="agent-name" style="color: ${msgObj.agent_color || '#4A90E2'}">${agentName}</strong>
+            </div>
+            <div class="agent-message-text">${msgObj.message}</div>
+        `;
+        
+        chatMessages.appendChild(messageElement);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        return messageElement;
     }
 
     function showLoadingIndicator() {
@@ -285,9 +303,21 @@ document.addEventListener("DOMContentLoaded", () => {
                             chatMessages.appendChild(divider);
                         }
 
-                        const className = msg.is_user ? "user-message" : "ai-message";
-                        const sender = msg.is_user ? "You" : "AI";
-                        appendMessage(sender, msg.message, className);
+                        // Display message with agent info if available
+                        if (msg.is_user) {
+                            appendMessage("You", msg.message, "user-message");
+                        } else if (msg.agent_name) {
+                            // Multi-agent message
+                            appendAgentMessage({
+                                message: msg.message,
+                                agent_name: msg.agent_name,
+                                agent_emoji: msg.agent_emoji,
+                                agent_color: msg.agent_color
+                            });
+                        } else {
+                            // Legacy AI message without agent info
+                            appendMessage("AI", msg.message, "ai-message");
+                        }
                     });
                 }
 
