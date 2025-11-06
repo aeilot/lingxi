@@ -39,8 +39,8 @@ def chat_ui(request):
 def handle_user_input(request):
     if request.method == "POST":
         user_message = unquote(request.POST.get("message", ""))
-        session_id_raw = request.POST.get("session_id", None)
-        session_id = unquote(session_id_raw) if session_id_raw else None
+        session_id_param = request.POST.get("session_id", None)
+        session_id = unquote(session_id_param) if session_id_param else None
 
         # Get API settings from Django settings (loaded from .env)
         api_key = settings.OPENAI_API_KEY

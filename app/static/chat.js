@@ -129,6 +129,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     } else if (data.response) {
                         // Legacy single message format (backward compatibility)
                         appendMessage("AI", data.response, "ai-message");
+                    } else {
+                        // No response received - show error
+                        appendMessage("Error", "Failed to get a response from the server.", "error-message");
                     }
 
                     // Update current session ID if it was created

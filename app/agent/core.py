@@ -6,6 +6,10 @@ from markdown_it import MarkdownIt
 import json
 import random
 
+# Configuration constants
+DEFAULT_MIN_RESPONDING_AGENTS = 1
+DEFAULT_MAX_RESPONDING_AGENTS = 2
+
 # System prompt template for split message feature
 SPLIT_MESSAGE_SYSTEM_PROMPT = """You can optionally split your response into multiple messages for better readability.
 If you want to split your response, return ONLY a JSON object in this exact format:
@@ -155,8 +159,8 @@ def generate_multi_agent_responses(user_message, agent_config, session, api_key=
     
     # Determine how many agents should respond
     if num_agents is None:
-        # Randomly choose 1-2 agents to respond
-        num_agents = random.choice([1, 2])
+        # Randomly choose between min and max responding agents
+        num_agents = random.randint(DEFAULT_MIN_RESPONDING_AGENTS, DEFAULT_MAX_RESPONDING_AGENTS)
     
     # Ensure we don't try to get more agents than available
     num_agents = min(num_agents, len(active_agents))
