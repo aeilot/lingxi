@@ -17,9 +17,10 @@ logger = logging.getLogger(__name__)
 
 @ensure_csrf_cookie
 def chat_ui(request):
-    # Get or create a default agent configuration
+    # Get or create a default agent configuration (for legacy UI, use null user)
     agent_config, _ = AgentConfiguration.objects.get_or_create(
         name="default",
+        user=None,
         defaults={"parameters": {"model": "simulated"}}
     )
     
@@ -42,9 +43,10 @@ def handle_user_input(request):
         base_url = settings.OPENAI_BASE_URL
         model = settings.OPENAI_MODEL
 
-        # Get or create agent configuration
+        # Get or create agent configuration (for legacy UI, use null user)
         agent_config, _ = AgentConfiguration.objects.get_or_create(
             name="default",
+            user=None,
             defaults={"parameters": {"model": model, "personality_prompt": ""}}
         )
         
@@ -193,6 +195,7 @@ def create_session(request):
         model = settings.OPENAI_MODEL
         agent_config, _ = AgentConfiguration.objects.get_or_create(
             name="default",
+            user=None,
             defaults={"parameters": {"model": model, "personality_prompt": ""}}
         )
         session = ChatSession.objects.create(agent_configuration=agent_config)
@@ -282,6 +285,7 @@ def update_personality_prompt(request):
         model = settings.OPENAI_MODEL
         agent_config, _ = AgentConfiguration.objects.get_or_create(
             name="default",
+            user=None,
             defaults={"parameters": {"model": model, "personality_prompt": ""}}
         )
         
@@ -300,6 +304,7 @@ def get_personality_prompt(request):
     model = settings.OPENAI_MODEL
     agent_config, _ = AgentConfiguration.objects.get_or_create(
         name="default",
+        user=None,
         defaults={"parameters": {"model": model, "personality_prompt": ""}}
     )
     
