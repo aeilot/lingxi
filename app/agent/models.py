@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 # Basic Models
 class ChatInformation(models.Model):
@@ -25,15 +26,20 @@ class ChatSummary(models.Model):
     )
 
 class AgentConfiguration(models.Model):
-    name = models.CharField(max_length=100, unique=True, verbose_name="Agent Name", help_text="The name of the agent configuration.")
+    name = models.CharField(max_length=100, verbose_name="Agent Name", help_text="The name of the agent configuration.")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="User", help_text="The user who owns this agent.", null=True, blank=True)
     parameters = models.JSONField(verbose_name="Parameters", help_text="Configuration parameters for the agent.")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created At", help_text="The date and time when the configuration was created.")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Updated At", help_text="The date and time when the configuration was last updated.")
     timings = models.JSONField(blank=True, null=True, verbose_name="Timings", help_text="Timing information related to the agent's operations.")
+
+    class Meta:
+        unique_together = [['name', 'user']]
     
 # ChatSession
 
 class ChatSession(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="User", help_text="The user who owns this session.", null=True, blank=True)
     agent_configuration = models.ForeignKey(
         'AgentConfiguration',
         on_delete=models.CASCADE,
